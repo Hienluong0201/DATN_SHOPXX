@@ -6,15 +6,15 @@ import CustomDrawerContent from '../components/CustomDrawerContent';
 export default function HomeLayout() {
   return (
     <Drawer
-      initialRouteName="index" // Đặt màn hình ban đầu
+      initialRouteName="index"
       screenOptions={{
         headerShown: true,
         header: () => <CustomHeader />,
         drawerPosition: 'left',
         drawerType: 'slide',
-        drawerStyle: { width: '80%' }, // Đảm bảo kích thước drawer
+        drawerStyle: { width: '80%' },
       }}
-      drawerContent={(props) => <CustomDrawerContent {...props} />} // Truyền props đầy đủ
+      drawerContent={(props) => <CustomDrawerContent {...props} />}
     >
       <Drawer.Screen name="index" options={{ title: 'Trang chủ' }} />
       <Drawer.Screen name="profile" options={{ title: 'Hồ sơ' }} />
@@ -25,6 +25,7 @@ export default function HomeLayout() {
       <Drawer.Screen name="cart" options={{ title: 'Giỏ hàng' }} />
       <Drawer.Screen name="orders" options={{ title: 'Đơn hàng' }} />
       <Drawer.Screen name="orderDetail" options={{ title: 'Chi tiết đơn hàng' }} />
+      <Drawer.Screen name="checkout" options={{ title: 'Thanh toán' }} />
     </Drawer>
   );
 }

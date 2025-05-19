@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useAuth } from '../../store/useAuth';
 import {
   Text,
@@ -13,8 +13,9 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { Alert } from 'react-native';
 
-// Dữ liệu mẫu
+// Dữ liệu mẫu (giữ nguyên)
 const categories = [
   { CategoryID: 1, Name: 'Áo Nam', Description: 'Áo thời trang dành cho nam' },
   { CategoryID: 2, Name: 'Quần Nam', Description: 'Quần phong cách dành cho nam' },
@@ -107,13 +108,13 @@ const productsByCategory = {
 
 export default function HomeScreen() {
   const { user, loadUser, setUser } = useAuth();
-  const fadeAnim = React.useRef(new Animated.Value(0)).current; // Animation cho banner
-  const slideAnim = React.useRef(new Animated.Value(50)).current; // Animation cho các section
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    loadUser(); // Load thông tin người dùng khi mở app
+    loadUser();
 
-    // Animation cho banner (fade in)
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 1200,
@@ -121,7 +122,6 @@ export default function HomeScreen() {
       useNativeDriver: true,
     }).start();
 
-    // Animation cho các section (slide up)
     Animated.timing(slideAnim, {
       toValue: 0,
       duration: 1000,
@@ -141,101 +141,137 @@ export default function HomeScreen() {
   const navigateToCategory = (categoryId) => router.push({ pathname: './products', params: { categoryId } });
   const navigateToProductDetail = (productId) => router.push({ pathname: './productDetail', params: { productId } });
 
-  return (
-    <ScrollView style={styles.container}>
-      {/* Banner Premium */}
-      <Animated.View style={[styles.bannerContainer, { opacity: fadeAnim }]}>
-        <Image
-          source={{ uri: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg' }}
-          style={styles.bannerImage}
-        />
-        <View style={styles.bannerOverlay}>
-          <Text style={styles.bannerTitle}>Khám phá phong cách đỉnh cao</Text>
-          <Text style={styles.bannerSubtitle}>Ưu đãi độc quyền - Giảm 50% hôm nay!</Text>
-          <TouchableOpacity style={styles.bannerButton} onPress={navigateToCategory}>
-            <Text style={styles.bannerButtonText}>Mua sắm ngay</Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
+  // Tạo một header cố định ẩn ban đầu
+  const stickyHeaderStyle = {
+    opacity: scrollY.interpolate({
+      inputRange: [300, 310], // 300 là chiều cao banner
+      outputRange: [0, 1],
+      extrapolate: 'clamp',
+    }),
+    transform: [
+      {
+        translateY: scrollY.interpolate({
+          inputRange: [300, 310],
+          outputRange: [-10, 0],
+          extrapolate: 'clamp',
+        }),
+      },
+    ],
+  };
 
-      {/* Header */}
-      <View style={styles.header}>
+  return (
+    <View style={styles.container}>
+      {/* Header cố định (ẩn ban đầu, hiện khi cuộn) */}
+      <Animated.View style={[styles.header, styles.stickyHeader, stickyHeaderStyle]}>
         <Text style={styles.greeting}>Xin chào, {user?.username ?? 'bạn'}!</Text>
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Text style={styles.logoutText}>Đăng xuất</Text>
         </TouchableOpacity>
-      </View>
-
-      {/* Danh mục (Categories) */}
-      <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim }] }]}>
-        <Text style={styles.sectionTitle}>Danh mục cao cấp</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryContainer}>
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category.CategoryID}
-              style={styles.categoryCard}
-              onPress={() => navigateToCategory(category.CategoryID)}
-            >
-              <View style={styles.categoryIcon}>
-                <MaterialIcons name="category" size={40} color="#d4af37" />
-              </View>
-              <Text style={styles.categoryName}>{category.Name}</Text>
-              <Text style={styles.categoryDesc}>{category.Description}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
       </Animated.View>
 
-      {/* Sản phẩm nổi bật (Featured Products) */}
-      <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim }] }]}>
-        <Text style={styles.sectionTitle}>Sản phẩm nổi bật</Text>
-        <View style={styles.gridContainer}>
-          {featuredProducts.map((product) => (
-            <TouchableOpacity
-              key={product.ProductID}
-              style={styles.featuredProductCard}
-              onPress={() => navigateToProductDetail(product.ProductID)}
-            >
-              <Image source={{ uri: product.Image }} style={styles.featuredProductImage} />
-              <View style={styles.productInfo}>
-                <Text style={styles.featuredProductName}>{product.Name}</Text>
-                <Text style={styles.featuredProductPrice}>{product.Price}</Text>
-              </View>
+      <Animated.ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
+      >
+        {/* Banner Premium */}
+        <Animated.View style={[styles.bannerContainer, { opacity: fadeAnim }]}>
+          <Image
+            source={{ uri: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg' }}
+            style={styles.bannerImage}
+          />
+          <View style={styles.bannerOverlay}>
+            <Text style={styles.bannerTitle}>Khám phá phong cách đỉnh cao</Text>
+            <Text style={styles.bannerSubtitle}>Ưu đãi độc quyền - Giảm 50% hôm nay!</Text>
+            <TouchableOpacity style={styles.bannerButton} onPress={navigateToCategory}>
+              <Text style={styles.bannerButtonText}>Mua sắm ngay</Text>
             </TouchableOpacity>
-          ))}
+          </View>
+        </Animated.View>
+
+        {/* Header ban đầu trong luồng nội dung */}
+        <View style={styles.header}>
+          <Text style={styles.greeting}>Xin chào, {user?.username ?? 'bạn'}!</Text>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <Text style={styles.logoutText}>Đăng xuất</Text>
+          </TouchableOpacity>
         </View>
-      </Animated.View>
 
-      {/* Sản phẩm theo danh mục */}
-      {categories.map((category) => {
-        const products = productsByCategory[category.CategoryID];
-        if (!products || products.length === 0) return null;
+        {/* Danh mục (Categories) */}
+        <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim }] }]}>
+          <Text style={styles.sectionTitle}>Danh mục cao cấp</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryContainer}>
+            {categories.map((category) => (
+              <TouchableOpacity
+                key={category.CategoryID}
+                style={styles.categoryCard}
+                onPress={() => navigateToCategory(category.CategoryID)}
+              >
+                <View style={styles.categoryIcon}>
+                  <MaterialIcons name="category" size={40} color="#d4af37" />
+                </View>
+                <Text style={styles.categoryName}>{category.Name}</Text>
+                <Text style={styles.categoryDesc}>{category.Description}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </Animated.View>
 
-        return (
-          <Animated.View
-            key={category.CategoryID}
-            style={[styles.section, { transform: [{ translateY: slideAnim }] }]}
-          >
-            <Text style={styles.sectionTitle}>{category.Name} cao cấp</Text>
-            <View style={styles.gridContainer}>
-              {products.map((product) => (
-                <TouchableOpacity
-                  key={product.ProductID}
-                  style={styles.productCard}
-                  onPress={() => navigateToProductDetail(product.ProductID)}
-                >
-                  <Image source={{ uri: product.Image }} style={styles.productImage} />
-                  <View style={styles.productInfo}>
-                    <Text style={styles.productName}>{product.Name}</Text>
-                    <Text style={styles.productPrice}>{product.Price}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </Animated.View>
-        );
-      })}
-    </ScrollView>
+        {/* Sản phẩm nổi bật (Featured Products) */}
+        <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim }] }]}>
+          <Text style={styles.sectionTitle}>Sản phẩm nổi bật</Text>
+          <View style={styles.gridContainer}>
+            {featuredProducts.map((product) => (
+              <TouchableOpacity
+                key={product.ProductID}
+                style={styles.featuredProductCard}
+                onPress={() => navigateToProductDetail(product.ProductID)}
+              >
+                <Image source={{ uri: product.Image }} style={styles.featuredProductImage} />
+                <View style={styles.productInfo}>
+                  <Text style={styles.featuredProductName}>{product.Name}</Text>
+                  <Text style={styles.featuredProductPrice}>{product.Price}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Animated.View>
+
+        {/* Sản phẩm theo danh mục */}
+        {categories.map((category) => {
+          const products = productsByCategory[category.CategoryID];
+          if (!products || products.length === 0) return null;
+
+          return (
+            <Animated.View
+              key={category.CategoryID}
+              style={[styles.section, { transform: [{ translateY: slideAnim }] }]}
+            >
+              <Text style={styles.sectionTitle}>{category.Name} cao cấp</Text>
+              <View style={styles.gridContainer}>
+                {products.map((product) => (
+                  <TouchableOpacity
+                    key={product.ProductID}
+                    style={styles.productCard}
+                    onPress={() => navigateToProductDetail(product.ProductID)}
+                  >
+                    <Image source={{ uri: product.Image }} style={styles.productImage} />
+                    <View style={styles.productInfo}>
+                      <Text style={styles.productName}>{product.Name}</Text>
+                      <Text style={styles.productPrice}>{product.Price}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </Animated.View>
+          );
+        })}
+      </Animated.ScrollView>
+    </View>
   );
 }
 
@@ -243,6 +279,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f0f2f5',
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   bannerContainer: {
     position: 'relative',
@@ -300,6 +342,17 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
     marginBottom: 10,
+  },
+  stickyHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
   },
   greeting: {
     fontSize: 28,

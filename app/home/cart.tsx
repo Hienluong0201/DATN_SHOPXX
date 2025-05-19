@@ -1,27 +1,53 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image } from 'react-native';
 import { router } from 'expo-router';
+import { useProducts } from '../../store/useProducts';
+import ProductCard from '../components/ProductCard';
 
-const cart = () => {
-  const sampleCart = [{ CartID: 1, UserID: 1, VariantID: 1, Quantity: 2, Name: 'Áo Polo Nam', Price: '499.000 VNĐ', Image: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg' }];
+const Cart = () => {
+  const { cart, loading, error } = useProducts();
 
-  const navigateToCheckout = () => router.push('/checkout'); // Giả định trang checkout
+  const navigateToCheckout = () => router.push('./checkout');
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#d4af37" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Giỏ hàng</Text>
-      {sampleCart.map((item) => (
-        <View key={item.CartID} style={styles.card}>
-          <Image source={{ uri: item.Image }} style={styles.image} />
-          <View style={styles.info}>
-            <Text style={styles.name}>{item.Name}</Text>
-            <Text style={styles.price}>{item.Price} x {item.Quantity}</Text>
+      {cart.length === 0 ? (
+        <Text style={styles.emptyText}>Giỏ hàng trống</Text>
+      ) : (
+        cart.map((item) => (
+          <View key={item.CartID} style={styles.card}>
+            <Image source={{ uri: item.Image }} style={styles.image} />
+            <View style={styles.info}>
+              <Text style={styles.name}>{item.Name}</Text>
+              <Text style={styles.price}>
+                {item.Price} x {item.Quantity}
+              </Text>
+            </View>
           </View>
-        </View>
-      ))}
-      <TouchableOpacity style={styles.button} onPress={navigateToCheckout}>
-        <Text style={styles.buttonText}>Thanh toán</Text>
-      </TouchableOpacity>
+        ))
+      )}
+      {cart.length > 0 && (
+        <TouchableOpacity style={styles.button} onPress={navigateToCheckout}>
+          <Text style={styles.buttonText}>Thanh toán</Text>
+        </TouchableOpacity>
+      )}
     </ScrollView>
   );
 };
@@ -36,6 +62,8 @@ const styles = StyleSheet.create({
   price: { fontSize: 14, color: '#c0392b', fontWeight: '700' },
   button: { backgroundColor: '#d4af37', padding: 12, borderRadius: 12, alignItems: 'center', margin: 10 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  emptyText: { fontSize: 16, color: '#2c2c2c', textAlign: 'center', marginTop: 20 },
+  errorText: { fontSize: 16, color: '#c0392b', textAlign: 'center', marginTop: 20 },
 });
 
-export default cart;
+export default Cart;
