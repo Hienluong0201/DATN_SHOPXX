@@ -1,8 +1,8 @@
-// app/_layout.tsx
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ProductProvider } from '../store/useProducts';
 
 export default function RootLayout() {
   const [checkingLogin, setCheckingLogin] = useState(true);
@@ -27,11 +27,13 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack
-      initialRouteName={isLoggedIn ? 'home' : 'index'}
-      screenOptions={{
-        headerShown: false,
-      }}
-    />
+    <ProductProvider>
+      <Stack
+        initialRouteName={isLoggedIn ? 'home' : 'index'}
+        screenOptions={{
+          headerShown: false,
+        }}
+      />
+    </ProductProvider>
   );
 }

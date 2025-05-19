@@ -1,34 +1,67 @@
 import React, { useState } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { router } from 'expo-router';
+import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { useLocalSearchParams, router } from 'expo-router';
+import { useProducts } from '../store/useProducts';
+import Cart from './home/cart';
 
-const productDetail = () => {
+const ProductDetail = () => {
+  const { productId } = useLocalSearchParams();
+  const { getProductById, addToCart, loading, error } = useProducts();
   const [selectedVariant, setSelectedVariant] = useState({ Size: 'M', Color: 'Nâu', Stock: 50 });
-  const product = { ProductID: 1, Name: 'Áo Polo Nam', Description: 'Áo Polo cao cấp', Price: '499.000 VNĐ', Image: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg' };
-  const variants = [{ VariantID: 1, ProductID: 1, Size: 'M', Color: 'Nâu', Stock: 50 }, { VariantID: 2, Size: 'L', Color: 'Đen', Stock: 30 }];
 
-  const addToCart = () => {
-    // Logic thêm vào giỏ hàng
-    console.log('Thêm vào giỏ:', selectedVariant);
+  const product = getProductById(Number(productId));
+  const variants = [
+    { VariantID: 1, ProductID: Number(productId), Size: 'M', Color: 'Nâu', Stock: 50 },
+    { VariantID: 2, Size: 'L', Color: 'Đen', Stock: 30 },
+  ];
+
+  const handleAddToCart = () => {
+    if (product) {
+      addToCart({ ...product, ...selectedVariant }, 1);
+      router.push('./home/cart');
+    }
   };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#d4af37" />
+      </View>
+    );
+  }
+
+  if (error || !product) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>{error || 'Sản phẩm không tồn tại'}</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
       <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-  <Text style={styles.backText}>← Quay lại</Text>
-</TouchableOpacity>
+        <Text style={styles.backText}>← Quay lại</Text>
+      </TouchableOpacity>
       <Image source={{ uri: product.Image }} style={styles.image} />
       <View style={styles.details}>
         <Text style={styles.name}>{product.Name}</Text>
         <Text style={styles.price}>{product.Price}</Text>
         <Text style={styles.description}>{product.Description}</Text>
         <Text style={styles.section}>Chọn biến thể:</Text>
-        {variants.map((variant, index) => (
-          <TouchableOpacity key={index} style={styles.variantCard} onPress={() => setSelectedVariant(variant)}>
+        {variants.map((variant) => (
+          <TouchableOpacity
+            key={variant.VariantID}
+            style={[
+              styles.variantCard,
+              selectedVariant.VariantID === variant.VariantID && styles.selectedVariant,
+            ]}
+            onPress={() => setSelectedVariant(variant)}
+          >
             <Text>Size: {variant.Size}, Màu: {variant.Color}, Tồn: {variant.Stock}</Text>
           </TouchableOpacity>
         ))}
-        <TouchableOpacity style={styles.button} onPress={addToCart}>
+        <TouchableOpacity style={styles.button} onPress={handleAddToCart}>
           <Text style={styles.buttonText}>Thêm vào giỏ</Text>
         </TouchableOpacity>
       </View>
@@ -45,6 +78,7 @@ const styles = StyleSheet.create({
   description: { fontSize: 16, color: '#2c2c2c', marginBottom: 15 },
   section: { fontSize: 18, fontWeight: '600', marginTop: 15 },
   variantCard: { backgroundColor: '#fff', padding: 10, marginBottom: 10, borderRadius: 10, elevation: 3 },
+  selectedVariant: { borderWidth: 2, borderColor: '#d4af37' },
   button: { backgroundColor: '#d4af37', padding: 12, borderRadius: 12, alignItems: 'center' },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   backButton: {
@@ -57,11 +91,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     zIndex: 10,
   },
-  backText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  
+  backText: { color: '#fff', fontSize: 16 },
+  errorText: { fontSize: 16, color: '#c0392b', textAlign: 'center', marginTop: 20 },
 });
 
-export default productDetail;
+export default ProductDetail;
