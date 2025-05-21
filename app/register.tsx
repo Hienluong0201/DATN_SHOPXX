@@ -1,6 +1,8 @@
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
+import { FontAwesome5, MaterialIcons } from '@expo/vector-icons'; 
+import AxiosInstance from '../axiosInstance/AxiosInstance';
 
 export default function RegisterScreen() {
   const [username, setUsername] = useState('');
@@ -9,69 +11,81 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
 
-  const handleRegister = () => {
-    if (!username || !password || !confirmPassword || !email || !phone) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin');
-      return;
-    }
+  const handleRegister = async () => {
+  if (!username || !password || !confirmPassword || !email ) {
+    Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin');
+    return;
+  }
 
-    if (password !== confirmPassword) {
-      Alert.alert('Lỗi', 'Mật khẩu không khớp');
-      return;
-    }
+  if (password !== confirmPassword) {
+    Alert.alert('Lỗi', 'Mật khẩu không khớp');
+    return;
+  }
 
-    // TODO: Gửi dữ liệu đến server nếu có
+  const payload = {
+    name: username,
+    email,
+    password,
+  };
 
-    Alert.alert('Thành công', 'Đăng ký thành công, mời bạn đăng nhập');
+  console.log('Dữ liệu gửi đi:', payload); // Log dữ liệu gửi đi
+
+ try {
+  const res = await AxiosInstance().post('/users/register', payload);
+  console.log('Dữ liệu nhận về:', res); // res chính là dữ liệu trả về
+
+  if (res && res._id) {
+    Alert.alert('Thành công', `${res.name} đã đăng ký thành công!`);
     router.replace('/login');
+  } else {
+    Alert.alert('Lỗi', 'Đăng ký thất bại, vui lòng thử lại');
+  }
+} catch (error: any) {
+  const message =
+    error.response?.data?.message ||
+    error.message ||
+    'Có lỗi xảy ra, vui lòng thử lại sau';
+  Alert.alert('Lỗi', message);
+}
+
+};
+
+
+  // Hàm render input có icon
+  const renderInput = (iconName, iconLib, placeholder, value, onChangeText, secure = false, keyboardType = 'default') => {
+    const IconComponent = iconLib === 'FontAwesome5' ? FontAwesome5 : MaterialIcons;
+    return (
+      <View style={styles.inputWrapper}>
+        <IconComponent name={iconName} size={20} color="#4B7BEC" style={styles.icon} />
+        <TextInput
+          placeholder={placeholder}
+          value={value}
+          onChangeText={onChangeText}
+          style={styles.input}
+          placeholderTextColor="#999"
+          secureTextEntry={secure}
+          keyboardType={keyboardType}
+          autoCapitalize="none"
+        />
+      </View>
+    );
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.logo}>X Shop</Text>
+      <Text style={styles.title}>Đăng Ký Tài Khoản</Text>
 
-      <TextInput
-        placeholder="Tài khoản"
-        value={username}
-        onChangeText={setUsername}
-        style={styles.input}
-        placeholderTextColor="#888"
-      />
-      <TextInput
-        placeholder="Mật khẩu"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-        style={styles.input}
-        placeholderTextColor="#888"
-      />
-      <TextInput
-        placeholder="Nhập lại mật khẩu"
-        secureTextEntry
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-        style={styles.input}
-        placeholderTextColor="#888"
-      />
-      <TextInput
-        placeholder="Email"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-        style={styles.input}
-        placeholderTextColor="#888"
-      />
-      <TextInput
-        placeholder="Số điện thoại"
-        keyboardType="phone-pad"
-        value={phone}
-        onChangeText={setPhone}
-        style={styles.input}
-        placeholderTextColor="#888"
-      />
+      {renderInput('user', 'FontAwesome5', 'Tài khoản', username, setUsername)}
+      {renderInput('lock', 'FontAwesome5', 'Mật khẩu', password, setPassword, true)}
+      {renderInput('lock', 'FontAwesome5', 'Nhập lại mật khẩu', confirmPassword, setConfirmPassword, true)}
+      {renderInput('email', 'MaterialIcons', 'Email', email, setEmail, false, 'email-address')}
 
-      <TouchableOpacity style={styles.registerBtn} onPress={handleRegister}>
-        <Text style={styles.registerText}>Đăng ký</Text>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={handleRegister}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.buttonText}>Đăng ký</Text>
       </TouchableOpacity>
     </View>
   );
@@ -80,36 +94,46 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
+    backgroundColor: '#f7f9fc',
+    paddingHorizontal: 24,
     justifyContent: 'center',
-    backgroundColor: '#fff',
   },
-  logo: {
-    fontSize: 36,
-    fontWeight: 'bold',
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#4B7BEC',
+    marginBottom: 36,
     textAlign: 'center',
-    marginBottom: 32,
-    color: '#000',
   },
-  input: {
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#ccc',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-    fontSize: 16,
-    color: '#000',
+    paddingHorizontal: 16,
+    marginBottom: 18,
   },
-  registerBtn: {
-    backgroundColor: '#000',
-    padding: 14,
-    borderRadius: 12,
+  icon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    height: 48,
+    fontSize: 16,
+    color: '#333',
+  },
+  button: {
+    backgroundColor: '#4B7BEC',
+    borderRadius: 14,
+    paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 8,
   },
-  registerText: {
+  buttonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '700',
   },
 });
