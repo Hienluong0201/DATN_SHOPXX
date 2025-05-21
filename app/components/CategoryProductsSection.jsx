@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, View, StyleSheet } from 'react-native';
+import {Animated, Text, View, StyleSheet } from 'react-native';
 import ProductCard from './ProductCard';
 
 const CategoryProductsSection = ({ category, products, navigateToProductDetail, slideAnim }) => {

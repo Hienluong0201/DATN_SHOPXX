@@ -12,10 +12,10 @@ type AuthState = {
   login: (user: User) => Promise<void>;
   logout: () => Promise<void>;
   loadUser: () => Promise<void>;
-  setUser: (user: User | null) => void;  // Thêm dòng này
+  setUser: (user: User | null) => void;
 };
 
-export const useAuth = create<AuthState>((set) => ({
+export const useAuth = create<AuthState>((set, get) => ({
   user: null,
 
   login: async (user) => {
@@ -31,11 +31,24 @@ export const useAuth = create<AuthState>((set) => ({
   },
 
   loadUser: async () => {
-    const userData = await AsyncStorage.getItem('user');
-    if (userData) {
-      set({ user: JSON.parse(userData) });
+    try {
+      const userData = await AsyncStorage.getItem('user');
+      if (userData) {
+        const parsedUser = JSON.parse(userData);
+        // Chỉ set user nếu khác user hiện tại để tránh setState liên tục
+        if (JSON.stringify(get().user) !== JSON.stringify(parsedUser)) {
+          set({ user: parsedUser });
+        }
+      } else {
+        // Nếu không có user trong AsyncStorage thì clear luôn
+        if (get().user !== null) {
+          set({ user: null });
+        }
+      }
+    } catch (error) {
+      console.error('Error loading user from AsyncStorage:', error);
     }
   },
 
-  setUser: (user) => set({ user }),  // Thêm hàm setUser để set user trực tiếp
+  setUser: (user) => set({ user }),
 }));
