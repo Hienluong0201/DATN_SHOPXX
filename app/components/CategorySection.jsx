@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, ScrollView, StyleSheet } from 'react-native';
+import { Animated,  Text, ScrollView, StyleSheet } from 'react-native';
 import CategoryCard from './CategoryCard';
 
 const CategorySection = ({ categories, navigateToCategory, slideAnim }) => {
