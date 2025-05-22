@@ -1,13 +1,21 @@
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 
 const ResetPasswordScreen = () => {
-  const [email, setEmail] = useState('');
+  const { email: initialEmail } = useLocalSearchParams();
+  const [email, setEmail] = useState(initialEmail || '');
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (initialEmail) {
+      setEmail(initialEmail);
+    }
+  }, [initialEmail]);
 
   const handleResetPassword = async () => {
     if (!email || !code || !newPassword) {
@@ -37,8 +45,15 @@ const ResetPasswordScreen = () => {
     }
   };
 
+  const handleBack = () => {
+    router.back();
+  };
+
   return (
     <View style={styles.container}>
+      <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+        <MaterialCommunityIcons name="arrow-left" size={24} color="#8B4513" />
+      </TouchableOpacity>
       <Text style={styles.title}>Đặt Lại Mật Khẩu</Text>
 
       <TextInput
@@ -47,6 +62,7 @@ const ResetPasswordScreen = () => {
         style={styles.input}
         value={email}
         onChangeText={setEmail}
+        editable={!!initialEmail}
       />
 
       <TextInput
@@ -86,37 +102,47 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 24,
     justifyContent: 'center',
-    backgroundColor: '#f7f9fc',
+    backgroundColor: '#fff',
+  },
+  backButton: {
+    position: 'absolute',
+    top: 40,
+    left: 16,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#4B7BEC',
-    marginBottom: 30,
+    color: '#8B4513',
+    marginBottom: 40,
     textAlign: 'center',
   },
   input: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    marginBottom: 16,
-    borderColor: '#ccc',
+    marginBottom: 24,
     borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   button: {
-    backgroundColor: '#4B7BEC',
-    borderRadius: 14,
+    backgroundColor: '#8B4513',
+    borderRadius: 25,
     paddingVertical: 14,
     alignItems: 'center',
+    shadowColor: '#8B4513',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 7,
   },
   disabledBtn: {
-    backgroundColor: '#8faadc',
+    backgroundColor: '#A9A9A9',
   },
   buttonText: {
     color: '#fff',
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
   },
 });

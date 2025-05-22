@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
 import { useAuth } from '../store/useAuth';
 
@@ -9,6 +9,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const { login } = useAuth();
 
@@ -38,8 +39,8 @@ export default function LoginScreen() {
     }
   };
 
-  const handleGoogleLogin = () => {
-    Alert.alert('Thông báo', 'Đăng nhập bằng Google đang được phát triển...');
+  const handleSocialLogin = (platform) => {
+    Alert.alert('Thông báo', `Đăng nhập bằng ${platform} đang được phát triển...`);
   };
 
   const goToRegister = () => {
@@ -48,14 +49,12 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Logo với icon */}
-      <View style={styles.logoContainer}>
-        <Image source={require('../assets/images/logo.png')} style={styles.logoImage} resizeMode="contain" />
-      </View>
+      {/* Title */}
+      <Text style={styles.title}>Đăng nhập</Text>
+      <Text style={styles.subtitle}>Xin chào, Mừng bạn quay trở lại.</Text>
 
       {/* Input Email */}
       <View style={styles.inputWrapper}>
-        <MaterialCommunityIcons name="email-outline" size={20} color="#4B7BEC" style={styles.inputIcon} />
         <TextInput
           placeholder="Email"
           value={email}
@@ -69,47 +68,58 @@ export default function LoginScreen() {
 
       {/* Input Password */}
       <View style={styles.inputWrapper}>
-        <MaterialCommunityIcons name="lock-outline" size={20} color="#4B7BEC" style={styles.inputIcon} />
         <TextInput
-          placeholder="Mật khẩu"
+          placeholder="Password"
           value={password}
           onChangeText={setPassword}
-          secureTextEntry
+          secureTextEntry={!showPassword}
           style={styles.input}
           placeholderTextColor="#999"
         />
+        <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.inputIcon}>
+          <MaterialCommunityIcons
+            name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+            size={20}
+            color="#999"
+          />
+        </TouchableOpacity>
       </View>
 
-      {/* Nút quên mật khẩu */}
-      <TouchableOpacity onPress={() => router.push('/forgot-password')} activeOpacity={0.7} style={styles.forgotPasswordBtn}>
+      {/* Forgot Password */}
+      <TouchableOpacity onPress={() => router.push('/forgot-password')} style={styles.forgotPasswordBtn}>
         <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
       </TouchableOpacity>
 
-      {/* Nút đăng nhập */}
+      {/* Sign In Button */}
       <TouchableOpacity
         style={[styles.loginBtn, loading && styles.disabledBtn]}
         onPress={handleLogin}
         disabled={loading}
         activeOpacity={0.8}
       >
-        {loading ? (
-          <MaterialCommunityIcons name="loading" size={24} color="#fff" style={{ marginRight: 8 }} />
-        ) : (
-          <MaterialCommunityIcons name="login" size={24} color="#fff" style={{ marginRight: 8 }} />
-        )}
-        <Text style={styles.loginText}>{loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</Text>
+        <Text style={styles.loginText}>{loading ? 'Đang đăng nhập...' : 'Sign In'}</Text>
       </TouchableOpacity>
 
-      {/* Nút đăng nhập Google */}
-      <TouchableOpacity style={styles.googleBtn} onPress={handleGoogleLogin} activeOpacity={0.8}>
-        <MaterialCommunityIcons name="google" size={24} color="#fff" style={{ marginRight: 8 }} />
-        <Text style={styles.googleText}>Đăng nhập bằng Google</Text>
-      </TouchableOpacity>
+      {/* Social Login Divider */}
+      <Text style={styles.dividerText}>Or sign in with</Text>
 
-      {/* Chuyển trang đăng ký */}
-      <TouchableOpacity onPress={goToRegister} activeOpacity={0.7}>
+      {/* Social Login Buttons */}
+      <View style={styles.socialButtonsContainer}>
+        <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('Apple')}>
+          <MaterialCommunityIcons name="apple" size={24} color="#000" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('Google')}>
+          <MaterialCommunityIcons name="google" size={24} color="#DB4437" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('Facebook')}>
+          <MaterialCommunityIcons name="facebook" size={24} color="#3B5998" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Register Link */}
+      <TouchableOpacity onPress={goToRegister} style={styles.registerBtn}>
         <Text style={styles.registerText}>
-          Chưa có tài khoản? <Text style={{ textDecorationLine: 'underline', color: '#4B7BEC' }}>Đăng ký</Text>
+          Bạn chưa có tài khoản? <Text style={styles.registerLink}>Sign Up</Text>
         </Text>
       </TouchableOpacity>
     </View>
@@ -121,95 +131,94 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 24,
     justifyContent: 'center',
-    backgroundColor: '#f7f9fc',
+    backgroundColor: '#fff',
   },
-  logoContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 40,
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 8,
   },
-  logoImage: {
-    width: 120,
-    height: 120,
-    alignSelf: 'center',
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
     marginBottom: 40,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 14,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginBottom: 20,
-    shadowColor: '#4B7BEC',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  inputIcon: {
-    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   input: {
     flex: 1,
     fontSize: 16,
     color: '#333',
   },
+  inputIcon: {
+    marginLeft: 10,
+  },
   forgotPasswordBtn: {
     alignSelf: 'flex-end',
     marginBottom: 20,
   },
   forgotPasswordText: {
-    color: '#4B7BEC',
+    color: '#666',
     fontSize: 14,
-    textDecorationLine: 'underline',
   },
   loginBtn: {
-    flexDirection: 'row',
-    backgroundColor: '#4B7BEC',
+    backgroundColor: '#8B4513',
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: '#4B7BEC',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 7,
+    marginBottom: 20,
   },
   disabledBtn: {
-    backgroundColor: '#8faadc',
+    backgroundColor: '#A9A9A9',
   },
   loginText: {
     color: '#fff',
     fontSize: 18,
-    fontWeight: '700',
-  },
-  googleBtn: {
-    flexDirection: 'row',
-    backgroundColor: '#db4437',
-    paddingVertical: 14,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 30,
-    shadowColor: '#db4437',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  googleText: {
-    color: '#fff',
-    fontSize: 16,
     fontWeight: '600',
   },
-  registerText: {
+  dividerText: {
     textAlign: 'center',
     color: '#666',
     fontSize: 14,
+    marginVertical: 20,
+  },
+  socialButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 30,
+  },
+  socialBtn: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  registerBtn: {
+    alignItems: 'center',
+  },
+  registerText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  registerLink: {
+    color: '#000',
+    textDecorationLine: 'underline',
   },
 });
