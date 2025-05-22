@@ -28,9 +28,9 @@ export default function ForgotPasswordScreen() {
 
       if (response.message === 'Mã xác thực đã được gửi đến email') {
         Alert.alert('Thành công', 'Vui lòng kiểm tra email để nhận mã xác nhận');
-        router.push('/reset-password');
+        router.push({ pathname: '/reset-password', params: { email } });
       } else {
-       Alert.alert('Lỗi', response.message || 'Gửi mã thất bại');
+        Alert.alert('Lỗi', response.message || 'Gửi mã thất bại');
       }
     } catch (error) {
       console.log('Error object:', error);
@@ -40,15 +40,22 @@ export default function ForgotPasswordScreen() {
     }
   };
 
+  const handleBack = () => {
+    router.back();
+  };
+
   return (
     <View style={styles.container}>
+      <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+        <MaterialCommunityIcons name="arrow-left" size={24} color="#8B4513" />
+      </TouchableOpacity>
       <Text style={styles.title}>Quên Mật Khẩu</Text>
 
       <View style={styles.inputWrapper}>
         <MaterialCommunityIcons
           name="email-outline"
           size={20}
-          color="#4B7BEC"
+          color="#8B4513"
           style={styles.icon}
         />
         <TextInput
@@ -89,28 +96,30 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 24,
     justifyContent: 'center',
-    backgroundColor: '#f7f9fc',
+    backgroundColor: '#fff',
+  },
+  backButton: {
+    position: 'absolute',
+    top: 40,
+    left: 16,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#4B7BEC',
+    color: '#8B4513',
     marginBottom: 40,
     textAlign: 'center',
   },
   inputWrapper: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 14,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 12,
     alignItems: 'center',
     marginBottom: 24,
-    shadowColor: '#4B7BEC',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   icon: {
     marginRight: 12,
@@ -122,23 +131,23 @@ const styles = StyleSheet.create({
   },
   sendBtn: {
     flexDirection: 'row',
-    backgroundColor: '#4B7BEC',
+    backgroundColor: '#8B4513',
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#4B7BEC',
+    shadowColor: '#8B4513',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 7,
   },
   disabledBtn: {
-    backgroundColor: '#8faadc',
+    backgroundColor: '#A9A9A9',
   },
   sendText: {
     color: '#fff',
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
   },
 });
