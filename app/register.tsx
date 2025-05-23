@@ -1,7 +1,7 @@
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
-import { FontAwesome5, MaterialIcons } from '@expo/vector-icons'; 
+import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
 
 export default function RegisterScreen() {
@@ -14,7 +14,7 @@ export default function RegisterScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleRegister = async () => {
-    if (!username || !password || !confirmPassword || !email) {
+    if (!username || !password || !confirmPassword || !email || !phone) {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin');
       return;
     }
@@ -24,17 +24,24 @@ export default function RegisterScreen() {
       return;
     }
 
+    const phoneRegex = /^(0|\+84)(3|5|7|8|9)[0-9]{8}$/;
+    if (!phoneRegex.test(phone)) {
+      Alert.alert('Lỗi', 'Số điện thoại không hợp lệ');
+      return;
+    }
+
     const payload = {
       name: username,
       email,
       password,
+      phone,
     };
 
-    console.log('Dữ liệu gửi đi:', payload); // Log dữ liệu gửi đi
+    console.log('Dữ liệu gửi đi:', payload);
 
     try {
       const res = await AxiosInstance().post('/users/register', payload);
-      console.log('Dữ liệu nhận về:', res); // res chính là dữ liệu trả về
+      console.log('Dữ liệu nhận về:', res);
 
       if (res && res._id) {
         Alert.alert('Thành công', `${res.name} đã đăng ký thành công!`);
@@ -51,7 +58,6 @@ export default function RegisterScreen() {
     }
   };
 
-  // Hàm render input có icon
   const renderInput = (iconName, iconLib, placeholder, value, onChangeText, secure = false, showSecure = false, toggleShow = null, keyboardType = 'default') => {
     const IconComponent = iconLib === 'FontAwesome5' ? FontAwesome5 : MaterialIcons;
     return (
@@ -98,7 +104,8 @@ export default function RegisterScreen() {
       {renderInput('user', 'FontAwesome5', 'Tài khoản', username, setUsername)}
       {renderInput('lock', 'FontAwesome5', 'Mật khẩu', password, setPassword, true, showPassword, () => setShowPassword(!showPassword))}
       {renderInput('lock', 'FontAwesome5', 'Nhập lại mật khẩu', confirmPassword, setConfirmPassword, true, showConfirmPassword, () => setShowConfirmPassword(!showConfirmPassword))}
-      {renderInput('email', 'MaterialIcons', 'Email', email, setEmail, false, 'email-address')}
+      {renderInput('email', 'MaterialIcons', 'Email', email, setEmail, false, false, null, 'email-address')}
+      {renderInput('phone', 'FontAwesome5', 'Số điện thoại', phone, setPhone, false, false, null, 'phone-pad')}
 
       <TouchableOpacity
         style={styles.button}
