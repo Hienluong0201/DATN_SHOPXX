@@ -6,14 +6,16 @@ import AxiosInstance from '../axiosInstance/AxiosInstance';
 import { useAuth } from '../store/useAuth';
 
 export default function LoginScreen() {
+  const [isEmailLogin, setIsEmailLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const { login } = useAuth();
 
-  const handleLogin = async () => {
+  const handleEmailLogin = async () => {
     if (email === '' || password === '') {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ email và mật khẩu');
       return;
@@ -39,6 +41,36 @@ export default function LoginScreen() {
     }
   };
 
+  const handlePhoneSubmit = async () => {
+    if (phone === '') {
+      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại');
+      return;
+    }
+
+    const phoneRegex = /^(0|\+84)(3|5|7|8|9)[0-9]{8}$/;
+    if (!phoneRegex.test(phone)) {
+      Alert.alert('Lỗi', 'Số điện thoại không hợp lệ');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await AxiosInstance().post('/users/send-otp', {
+        phone,
+      });
+
+      if (response.message === 'Mã OTP đã được gửi đến số điện thoại') {
+        router.push({ pathname: '/OTPScreen', params: { phone } });
+      } else {
+        Alert.alert('Lỗi', response.message || 'Không thể gửi mã OTP');
+      }
+    } catch (error) {
+      Alert.alert('Lỗi', 'Có lỗi xảy ra. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSocialLogin = (platform) => {
     Alert.alert('Thông báo', `Đăng nhập bằng ${platform} đang được phát triển...`);
   };
@@ -49,61 +81,86 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Title */}
       <Text style={styles.title}>Đăng nhập</Text>
-      <Text style={styles.subtitle}>Xin chào, Mừng bạn quay trở lại.</Text>
 
-      {/* Input Email */}
-      <View style={styles.inputWrapper}>
-        <TextInput
-          placeholder="Email"
-          value={email}
-          onChangeText={setEmail}
-          style={styles.input}
-          placeholderTextColor="#999"
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-      </View>
-
-      {/* Input Password */}
-      <View style={styles.inputWrapper}>
-        <TextInput
-          placeholder="Password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry={!showPassword}
-          style={styles.input}
-          placeholderTextColor="#999"
-        />
-        <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.inputIcon}>
-          <MaterialCommunityIcons
-            name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-            size={20}
-            color="#999"
-          />
+      <View style={styles.toggleContainer}>
+        <TouchableOpacity onPress={() => setIsEmailLogin(true)}>
+          <Text style={[styles.toggleText, isEmailLogin && styles.toggleTextActive]}>Email</Text>
+        </TouchableOpacity>
+        <Text style={styles.toggleSeparator}> / </Text>
+        <TouchableOpacity onPress={() => setIsEmailLogin(false)}>
+          <Text style={[styles.toggleText, !isEmailLogin && styles.toggleTextActive]}>Số điện thoại</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Forgot Password */}
-      <TouchableOpacity onPress={() => router.push('/forgot-password')} style={styles.forgotPasswordBtn}>
-        <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
-      </TouchableOpacity>
+      {isEmailLogin ? (
+        <>
+          <View style={styles.inputWrapper}>
+            <TextInput
+              placeholder="Email"
+              value={email}
+              onChangeText={setEmail}
+              style={styles.input}
+              placeholderTextColor="#999"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
+          <View style={styles.inputWrapper}>
+            <TextInput
+              placeholder="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              style={styles.input}
+              placeholderTextColor="#999"
+            />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.inputIcon}>
+              <MaterialCommunityIcons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color="#999"
+              />
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity onPress={() => router.push('/forgot-password')} style={styles.forgotPasswordBtn}>
+            <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.loginBtn, loading && styles.disabledBtn]}
+            onPress={handleEmailLogin}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.loginText}>{loading ? 'Đang đăng nhập...' : 'Sign In'}</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <>
+          <View style={styles.inputWrapper}>
+            <TextInput
+              placeholder="Số điện thoại"
+              value={phone}
+              onChangeText={setPhone}
+              style={styles.input}
+              placeholderTextColor="#999"
+              keyboardType="phone-pad"
+              autoCapitalize="none"
+            />
+          </View>
+          <TouchableOpacity
+            style={[styles.loginBtn, loading && styles.disabledBtn]}
+            onPress={handlePhoneSubmit}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.loginText}>{loading ? 'Đang xử lý...' : 'Tiếp tục'}</Text>
+          </TouchableOpacity>
+        </>
+      )}
 
-      {/* Sign In Button */}
-      <TouchableOpacity
-        style={[styles.loginBtn, loading && styles.disabledBtn]}
-        onPress={handleLogin}
-        disabled={loading}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.loginText}>{loading ? 'Đang đăng nhập...' : 'Sign In'}</Text>
-      </TouchableOpacity>
+      <Text style={styles.dividerText}>Hoặc đăng nhập bằng</Text>
 
-      {/* Social Login Divider */}
-      <Text style={styles.dividerText}>Or sign in with</Text>
-
-      {/* Social Login Buttons */}
       <View style={styles.socialButtonsContainer}>
         <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('Apple')}>
           <MaterialCommunityIcons name="apple" size={24} color="#000" />
@@ -116,7 +173,6 @@ export default function LoginScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Register Link */}
       <TouchableOpacity onPress={goToRegister} style={styles.registerBtn}>
         <Text style={styles.registerText}>
           Bạn chưa có tài khoản? <Text style={styles.registerLink}>Sign Up</Text>
@@ -137,13 +193,26 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 20,
   },
-  subtitle: {
+  toggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  toggleText: {
     fontSize: 16,
     color: '#666',
-    textAlign: 'center',
-    marginBottom: 40,
+  },
+  toggleTextActive: {
+    color: '#8B4513',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  toggleSeparator: {
+    fontSize: 16,
+    color: '#666',
+    marginHorizontal: 5,
   },
   inputWrapper: {
     flexDirection: 'row',
