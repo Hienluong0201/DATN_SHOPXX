@@ -1,12 +1,12 @@
-import React from 'react';
 import { Drawer } from 'expo-router/drawer';
-import CustomHeader from '../components/CustomHeader';
+import React from 'react';
 import CustomDrawerContent from '../components/CustomDrawerContent';
+import CustomHeader from '../components/CustomHeader';
 
 export default function HomeLayout() {
   return (
     <Drawer
-      initialRouteName="index"
+      initialRouteName="(tabs)"
       screenOptions={{
         headerShown: true,
         header: () => <CustomHeader />,
@@ -16,13 +16,10 @@ export default function HomeLayout() {
       }}
       drawerContent={(props) => <CustomDrawerContent {...props} />}
     >
-      <Drawer.Screen name="index" options={{ title: 'Trang chủ' }} />
-      <Drawer.Screen name="profile" options={{ title: 'Hồ sơ' }} />
+      <Drawer.Screen name="(tabs)" options={{ title: 'Trang chủ' }} />
       <Drawer.Screen name="wishlist" options={{ title: 'Yêu thích' }} />
-      <Drawer.Screen name="reviews" options={{ title: 'Đánh giá' }} />
       <Drawer.Screen name="products" options={{ title: 'Sản phẩm' }} />
       <Drawer.Screen name="productDetail" options={{ title: 'Chi tiết sản phẩm' }} />
-      <Drawer.Screen name="cart" options={{ title: 'Giỏ hàng' }} />
       <Drawer.Screen name="orders" options={{ title: 'Đơn hàng' }} />
       <Drawer.Screen name="orderDetail" options={{ title: 'Chi tiết đơn hàng' }} />
       <Drawer.Screen name="checkout" options={{ title: 'Thanh toán' }} />
