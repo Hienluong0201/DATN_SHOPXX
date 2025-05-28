@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+// store/useProducts.tsx
+import { createContext, useContext, useState, useEffect, FC, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Dữ liệu mẫu (sẽ thay bằng API)
+// Dữ liệu mẫu
 const mockCategories = [
   { CategoryID: 1, Name: 'Áo Nam', Description: 'Áo thời trang dành cho nam' },
   { CategoryID: 2, Name: 'Quần Nam', Description: 'Quần phong cách dành cho nam' },
@@ -63,26 +64,34 @@ interface ProductContextType {
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
-export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [categories, setCategories] = useState<any[]>(mockCategories);
-  const [products, setProducts] = useState<any[]>(mockProducts);
-  const [cart, setCart] = useState<any[]>(mockCart);
+export const ProductProvider: FC<{ children: ReactNode }> = ({ children }) => {
+  const [categories, setCategories] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [cart, setCart] = useState<any[]>([]);
   const [wishlist, setWishlist] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      // TODO: Thay bằng API thực
-      // const response = await fetch('https://api.example.com/data');
-      // const data = await response.json();
-      // setCategories(data.categories);
-      // setProducts(data.products);
-      await AsyncStorage.setItem('categories', JSON.stringify(mockCategories));
-      await AsyncStorage.setItem('products', JSON.stringify(mockProducts));
+      const storedCategories = await AsyncStorage.getItem('categories');
+      const storedProducts = await AsyncStorage.getItem('products');
+      if (storedCategories && storedProducts) {
+        setCategories(JSON.parse(storedCategories));
+        setProducts(JSON.parse(storedProducts));
+      } else {
+        await AsyncStorage.setItem('categories', JSON.stringify(mockCategories));
+        await AsyncStorage.setItem('products', JSON.stringify(mockProducts));
+        setCategories(mockCategories);
+        setProducts(mockProducts);
+      }
+      setCart(mockCart); // Khởi tạo giỏ hàng với dữ liệu mẫu
     } catch (err) {
-      setError('Failed to fetch data');
+      setError('Failed to fetch or store data');
+      setCategories(mockCategories); // Fallback to mock data
+      setProducts(mockProducts);
+      setCart(mockCart);
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../store/useAuth';
 import {
   Text,
@@ -9,111 +9,100 @@ import {
   Image,
   Animated,
   Easing,
+  TextInput,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { Alert } from 'react-native';
-
-// Dữ liệu mẫu (giữ nguyên)
-const categories = [
-  { CategoryID: 1, Name: 'Áo Nam', Description: 'Áo thời trang dành cho nam' },
-  { CategoryID: 2, Name: 'Quần Nam', Description: 'Quần phong cách dành cho nam' },
-  { CategoryID: 3, Name: 'Phụ Kiện', Description: 'Phụ kiện thời trang' },
-];
-
-const featuredProducts = [
-  {
-    ProductID: 1,
-    CategoryID: 1,
-    Name: 'Áo Polo Nam',
-    Description: 'Áo Polo cao cấp',
-    Price: '499.000 VNĐ',
-    Image: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg',
-  },
-  {
-    ProductID: 2,
-    CategoryID: 2,
-    Name: 'Quần Jeans',
-    Description: 'Quần Jeans thời thượng',
-    Price: '799.000 VNĐ',
-    Image: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg',
-  },
-  {
-    ProductID: 3,
-    CategoryID: 3,
-    Name: 'Dây Lưng Da',
-    Description: 'Dây lưng cao cấp',
-    Price: '299.000 VNĐ',
-    Image: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg',
-  },
-];
-
-const productsByCategory = {
-  1: [
-    {
-      ProductID: 4,
-      CategoryID: 1,
-      Name: 'Áo Sơ Mi Nam',
-      Description: 'Áo sơ mi lịch lãm',
-      Price: '599.000 VNĐ',
-      Image: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg',
-    },
-    {
-      ProductID: 5,
-      CategoryID: 1,
-      Name: 'Áo Thun Nam',
-      Description: 'Áo thun thoải mái',
-      Price: '299.000 VNĐ',
-      Image: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg',
-    },
-  ],
-  2: [
-    {
-      ProductID: 6,
-      CategoryID: 2,
-      Name: 'Quần Kaki',
-      Description: 'Quần Kaki phong cách',
-      Price: '699.000 VNĐ',
-      Image: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg',
-    },
-    {
-      ProductID: 7,
-      CategoryID: 2,
-      Name: 'Quần Short',
-      Description: 'Quần short năng động',
-      Price: '399.000 VNĐ',
-      Image: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg',
-    },
-  ],
-  3: [
-    {
-      ProductID: 8,
-      CategoryID: 3,
-      Name: 'Kính Mát',
-      Description: 'Kính mát thời trang',
-      Price: '450.000 VNĐ',
-      Image: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg',
-    },
-    {
-      ProductID: 9,
-      CategoryID: 3,
-      Name: 'Ví Da',
-      Description: 'Ví da cao cấp',
-      Price: '350.000 VNĐ',
-      Image: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg',
-    },
-  ],
-};
+import AxiosInstance from '../../axiosInstance/AxiosInstance';
 
 export default function HomeScreen() {
   const { user, loadUser, setUser } = useAuth();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const [categories, setCategories] = useState([]); // State lưu danh mục
+  const [productsByCategory, setProductsByCategory] = useState({}); // State lưu sản phẩm theo danh mục
+
+  // Hàm gọi API để lấy danh mục
+  const fetchCategories = async () => {
+    try {
+      const response = await AxiosInstance().get('/category');
+      console.log('API Categories Response:', response);
+      const fetchedCategories = response.map((category) => ({
+        CategoryID: category._id,
+        Name: category.name,
+        Icon: getIconForCategory(category.name),
+        Description: category.description,
+        Status: category.status,
+      }));
+      setCategories(fetchedCategories);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      Alert.alert('Lỗi', 'Không thể tải danh mục. Vui lòng thử lại sau.');
+    }
+  };
+
+  // Hàm gọi API để lấy sản phẩm
+  const fetchProducts = async () => {
+    try {
+      const response = await AxiosInstance().get('/products');
+      console.log('API Products Response:', response);
+      const products = response.products;
+
+      // Tạo object để nhóm sản phẩm theo categoryID
+      const groupedProducts = {};
+      for (const product of products) {
+        const categoryId = product.categoryID;
+        if (!groupedProducts[categoryId]) {
+          groupedProducts[categoryId] = [];
+        }
+
+        // Gọi API lấy hình ảnh cho sản phẩm
+        const imageResponse = await AxiosInstance().get(`/img?productID=${product._id}`);
+        const imageURLs = imageResponse[0]?.imageURL || ['https://via.placeholder.com/150']; // Fallback nếu không có ảnh
+
+        groupedProducts[categoryId].push({
+          ProductID: product._id,
+          CategoryID: product.categoryID,
+          Name: product.name,
+          Price: product.price.toLocaleString('vi-VN'), // Định dạng giá
+          Rating: 4.0, // Giả lập rating vì API không cung cấp
+          Image: imageURLs[0], // Lấy ảnh đầu tiên
+        });
+      }
+
+      setProductsByCategory(groupedProducts);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      Alert.alert('Lỗi', 'Không thể tải sản phẩm. Vui lòng thử lại sau.');
+    }
+  };
+
+  // Hàm ánh xạ tên danh mục với icon
+  const getIconForCategory = (name) => {
+    switch (name) {
+      case 'Áo Khoác':
+        return 'jacket-outline';
+      case 'Áo Polo':
+        return 'shirt-outline';
+      case 'Áo Thun':
+        return 'shirt-outline';
+      case 'Áo Sơ Mi':
+        return 'shirt-outline';
+      case 'Quần Dài':
+        return 'man-outline';
+      case 'Quần Đùi':
+        return 'man-outline';
+      default:
+        return 'cube-outline';
+    }
+  };
 
   useEffect(() => {
     loadUser();
+    fetchCategories(); // Gọi API danh mục
+    fetchProducts(); // Gọi API sản phẩm
 
     Animated.timing(fadeAnim, {
       toValue: 1,
@@ -141,69 +130,38 @@ export default function HomeScreen() {
   const navigateToCategory = (categoryId) => router.push({ pathname: './products', params: { categoryId } });
   const navigateToProductDetail = (productId) => router.push({ pathname: './productDetail', params: { productId } });
 
-  // Tạo một header cố định ẩn ban đầu
-  const stickyHeaderStyle = {
-    opacity: scrollY.interpolate({
-      inputRange: [300, 310], // 300 là chiều cao banner
-      outputRange: [0, 1],
-      extrapolate: 'clamp',
-    }),
-    transform: [
-      {
-        translateY: scrollY.interpolate({
-          inputRange: [300, 310],
-          outputRange: [-10, 0],
-          extrapolate: 'clamp',
-        }),
-      },
-    ],
-  };
-
   return (
     <View style={styles.container}>
-      {/* Header cố định (ẩn ban đầu, hiện khi cuộn) */}
-      <Animated.View style={[styles.header, styles.stickyHeader, stickyHeaderStyle]}>
-        <Text style={styles.greeting}>Xin chào, {user?.username ?? 'bạn'}!</Text>
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Text style={styles.logoutText}>Đăng xuất</Text>
-        </TouchableOpacity>
-      </Animated.View>
+      <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
+        {/* Thanh tìm kiếm */}
+        <View style={styles.searchContainer}>
+          <TextInput style={styles.searchInput} placeholder="Tìm kiếm" placeholderTextColor="#999" />
+          <MaterialIcons name="search" size={24} color="#8B4513" style={styles.searchIcon} />
+        </View>
 
-      <Animated.ScrollView
-        style={styles.scrollContainer}
-        contentContainerStyle={styles.scrollContent}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
-        )}
-        scrollEventThrottle={16}
-      >
-        {/* Banner Premium */}
+        {/* Banner quảng cáo */}
         <Animated.View style={[styles.bannerContainer, { opacity: fadeAnim }]}>
           <Image
-            source={{ uri: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg' }}
+            source={{ uri: 'https://via.placeholder.com/400x150.png?text=New+Collection' }}
             style={styles.bannerImage}
           />
           <View style={styles.bannerOverlay}>
-            <Text style={styles.bannerTitle}>Khám phá phong cách đỉnh cao</Text>
-            <Text style={styles.bannerSubtitle}>Ưu đãi độc quyền - Giảm 50% hôm nay!</Text>
-            <TouchableOpacity style={styles.bannerButton} onPress={navigateToCategory}>
-              <Text style={styles.bannerButtonText}>Mua sắm ngay</Text>
+            <Text style={styles.bannerTitle}>New Collection</Text>
+            <Text style={styles.bannerSubtitle}>Discount 50% for transactions</Text>
+            <TouchableOpacity style={styles.bannerButton} onPress={() => navigateToCategory(categories[0]?.CategoryID)}>
+              <Text style={styles.bannerButtonText}>SHOP NOW</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
 
-        {/* Header ban đầu trong luồng nội dung */}
-        <View style={styles.header}>
-          <Text style={styles.greeting}>Xin chào, {user?.username ?? 'bạn'}!</Text>
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-            <Text style={styles.logoutText}>Đăng xuất</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Danh mục (Categories) */}
+        {/* Danh mục */}
         <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim }] }]}>
-          <Text style={styles.sectionTitle}>Danh mục cao cấp</Text>
+          <View style={styles.categoryHeader}>
+            <Text style={styles.sectionTitle}>Danh Mục</Text>
+            <TouchableOpacity>
+              <Text style={styles.viewAllText}>Xem tất cả</Text>
+            </TouchableOpacity>
+          </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryContainer}>
             {categories.map((category) => (
               <TouchableOpacity
@@ -212,33 +170,12 @@ export default function HomeScreen() {
                 onPress={() => navigateToCategory(category.CategoryID)}
               >
                 <View style={styles.categoryIcon}>
-                  <MaterialIcons name="category" size={40} color="#d4af37" />
+                  <Ionicons name={category.Icon} size={30} color="#8B4513" />
                 </View>
                 <Text style={styles.categoryName}>{category.Name}</Text>
-                <Text style={styles.categoryDesc}>{category.Description}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
-        </Animated.View>
-
-        {/* Sản phẩm nổi bật (Featured Products) */}
-        <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim }] }]}>
-          <Text style={styles.sectionTitle}>Sản phẩm nổi bật</Text>
-          <View style={styles.gridContainer}>
-            {featuredProducts.map((product) => (
-              <TouchableOpacity
-                key={product.ProductID}
-                style={styles.featuredProductCard}
-                onPress={() => navigateToProductDetail(product.ProductID)}
-              >
-                <Image source={{ uri: product.Image }} style={styles.featuredProductImage} />
-                <View style={styles.productInfo}>
-                  <Text style={styles.featuredProductName}>{product.Name}</Text>
-                  <Text style={styles.featuredProductPrice}>{product.Price}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
         </Animated.View>
 
         {/* Sản phẩm theo danh mục */}
@@ -251,7 +188,12 @@ export default function HomeScreen() {
               key={category.CategoryID}
               style={[styles.section, { transform: [{ translateY: slideAnim }] }]}
             >
-              <Text style={styles.sectionTitle}>{category.Name} cao cấp</Text>
+              <View style={styles.categoryHeader}>
+                <Text style={styles.sectionTitle}>{category.Name}</Text>
+                <TouchableOpacity>
+                  <Text style={styles.viewAllText}>Tất cả</Text>
+                </TouchableOpacity>
+              </View>
               <View style={styles.gridContainer}>
                 {products.map((product) => (
                   <TouchableOpacity
@@ -262,7 +204,11 @@ export default function HomeScreen() {
                     <Image source={{ uri: product.Image }} style={styles.productImage} />
                     <View style={styles.productInfo}>
                       <Text style={styles.productName}>{product.Name}</Text>
-                      <Text style={styles.productPrice}>{product.Price}</Text>
+                      <View style={styles.ratingContainer}>
+                        <Ionicons name="star" size={14} color="#FFD700" />
+                        <Text style={styles.ratingText}>{product.Rating}</Text>
+                      </View>
+                      <Text style={styles.productPrice}>{product.Price}đ</Text>
                     </View>
                   </TouchableOpacity>
                 ))}
@@ -270,25 +216,45 @@ export default function HomeScreen() {
             </Animated.View>
           );
         })}
-      </Animated.ScrollView>
+      </ScrollView>
     </View>
   );
 }
 
+// Styles giữ nguyên như code gốc
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0f2f5',
+    backgroundColor: '#fff',
   },
   scrollContainer: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 20,
+    paddingBottom: 80,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    margin: 15,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 25,
+    paddingHorizontal: 15,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 10,
+    color: '#333',
+  },
+  searchIcon: {
+    marginLeft: 10,
   },
   bannerContainer: {
-    position: 'relative',
-    height: 300,
+    height: 150,
+    marginHorizontal: 15,
+    borderRadius: 15,
+    overflow: 'hidden',
     marginBottom: 20,
   },
   bannerImage: {
@@ -302,193 +268,114 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   bannerTitle: {
-    fontSize: 32,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#fff',
-    textAlign: 'center',
-    textShadowColor: '#000',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 5,
   },
   bannerSubtitle: {
-    fontSize: 18,
+    fontSize: 14,
     color: '#fff',
-    marginVertical: 10,
-    textAlign: 'center',
+    marginVertical: 5,
   },
   bannerButton: {
-    backgroundColor: '#d4af37',
-    paddingHorizontal: 25,
-    paddingVertical: 12,
-    borderRadius: 30,
-    elevation: 5,
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
   bannerButtonText: {
-    color: '#fff',
-    fontSize: 18,
+    color: '#8B4513',
+    fontSize: 14,
     fontWeight: '600',
   },
-  header: {
-    backgroundColor: '#1a1a1a',
-    padding: 20,
+  section: {
+    paddingHorizontal: 15,
+    marginBottom: 20,
+  },
+  categoryHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    marginBottom: 10,
-  },
-  stickyHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1000,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-  },
-  greeting: {
-    fontSize: 28,
-    color: '#d4af37',
-    fontWeight: 'bold',
-  },
-  logoutBtn: {
-    backgroundColor: '#c0392b',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#fff',
-  },
-  logoutText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  section: {
-    padding: 20,
-    backgroundColor: '#fff',
     marginBottom: 15,
-    marginHorizontal: 10,
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
-    elevation: 10,
   },
   sectionTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 15,
-    color: '#1a1a1a',
-    textTransform: 'uppercase',
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  viewAllText: {
+    fontSize: 14,
+    color: '#8B4513',
   },
   categoryContainer: {
     flexDirection: 'row',
-    paddingVertical: 10,
   },
   categoryCard: {
-    width: 160,
-    marginRight: 15,
-    backgroundColor: '#2c2c2c',
-    borderRadius: 15,
-    padding: 15,
     alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    marginRight: 20,
   },
   categoryIcon: {
-    marginBottom: 10,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 50,
+    padding: 15,
+    marginBottom: 5,
   },
   categoryName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#d4af37',
+    fontSize: 14,
+    color: '#333',
     textAlign: 'center',
-  },
-  categoryDesc: {
-    fontSize: 12,
-    color: '#bdc3c7',
-    textAlign: 'center',
-    marginTop: 5,
   },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    paddingVertical: 10,
-  },
-  featuredProductCard: {
-    width: '48%',
-    marginBottom: 15,
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 10,
-    alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
   },
   productCard: {
     width: '48%',
     marginBottom: 15,
     backgroundColor: '#fff',
-    borderRadius: 15,
+    borderRadius: 10,
     padding: 10,
-    alignItems: 'center',
-    elevation: 5,
+    elevation: 3,
     shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-  },
-  featuredProductImage: {
-    width: 160,
-    height: 160,
-    resizeMode: 'cover',
-    borderRadius: 15,
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
   },
   productImage: {
-    width: 140,
-    height: 140,
+    width: '100%',
+    height: 150,
     resizeMode: 'cover',
     borderRadius: 10,
   },
   productInfo: {
-    alignItems: 'center',
     marginTop: 10,
   },
-  featuredProductName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    textAlign: 'center',
-  },
   productName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#2c2c2c',
+    color: '#333',
     textAlign: 'center',
   },
-  featuredProductPrice: {
-    fontSize: 16,
-    color: '#c0392b',
-    fontWeight: '700',
-    marginTop: 5,
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 5,
+  },
+  ratingText: {
+    fontSize: 12,
+    color: '#333',
+    marginLeft: 5,
   },
   productPrice: {
     fontSize: 14,
-    color: '#c0392b',
+    color: '#8B4513',
     fontWeight: '600',
-    marginTop: 5,
+    textAlign: 'center',
   },
 });
