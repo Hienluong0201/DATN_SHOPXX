@@ -1,4 +1,3 @@
-// app/_layout.tsx
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
@@ -11,9 +10,15 @@ export default function RootLayout() {
 
   useEffect(() => {
     const checkLoginStatus = async () => {
-      const loginStatus = await AsyncStorage.getItem('isLoggedIn');
-      setIsLoggedIn(loginStatus === 'true');
-      setCheckingLogin(false);
+      try {
+        const loginStatus = await AsyncStorage.getItem('isLoggedIn');
+        setIsLoggedIn(loginStatus === 'true');
+      } catch (error) {
+        console.error('Error checking login status:', error);
+        setIsLoggedIn(false);
+      } finally {
+        setCheckingLogin(false);
+      }
     };
 
     checkLoginStatus();
@@ -34,7 +39,15 @@ export default function RootLayout() {
         screenOptions={{
           headerShown: false,
         }}
-      />
+      >
+        <Stack.Screen name="index" />
+        <Stack.Screen name="home" />
+        <Stack.Screen name="login" />
+        <Stack.Screen name="register" />
+        <Stack.Screen name="forgot-password" />
+        <Stack.Screen name="reset-password" />
+        <Stack.Screen name="OTPScreen" />
+      </Stack>
     </ProductProvider>
   );
 }

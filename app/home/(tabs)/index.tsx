@@ -1,108 +1,33 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useAuth } from '../../store/useAuth';
-import {
-  Text,
-  View,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Image,
-  Animated,
-  Easing,
-  TextInput,
-} from 'react-native';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons';
-import { Alert } from 'react-native';
-import AxiosInstance from '../../axiosInstance/AxiosInstance';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Easing,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useAuth } from '../../../store/useAuth';
+import { useProducts } from '../../../store/useProducts';
 
 export default function HomeScreen() {
   const { user, loadUser, setUser } = useAuth();
+  const { categories, products, getProductsByCategory, loading, error } = useProducts();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
-  const [categories, setCategories] = useState([]); // State lưu danh mục
-  const [productsByCategory, setProductsByCategory] = useState({}); // State lưu sản phẩm theo danh mục
-
-  // Hàm gọi API để lấy danh mục
-  const fetchCategories = async () => {
-    try {
-      const response = await AxiosInstance().get('/category');
-      console.log('API Categories Response:', response);
-      const fetchedCategories = response.map((category) => ({
-        CategoryID: category._id,
-        Name: category.name,
-        Icon: getIconForCategory(category.name),
-        Description: category.description,
-        Status: category.status,
-      }));
-      setCategories(fetchedCategories);
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-      Alert.alert('Lỗi', 'Không thể tải danh mục. Vui lòng thử lại sau.');
-    }
-  };
-
-  // Hàm gọi API để lấy sản phẩm
-  const fetchProducts = async () => {
-    try {
-      const response = await AxiosInstance().get('/products');
-      console.log('API Products Response:', response);
-      const products = response.products;
-
-      // Tạo object để nhóm sản phẩm theo categoryID
-      const groupedProducts = {};
-      for (const product of products) {
-        const categoryId = product.categoryID;
-        if (!groupedProducts[categoryId]) {
-          groupedProducts[categoryId] = [];
-        }
-
-        // Gọi API lấy hình ảnh cho sản phẩm
-        const imageResponse = await AxiosInstance().get(`/img?productID=${product._id}`);
-        const imageURLs = imageResponse[0]?.imageURL || ['https://via.placeholder.com/150']; // Fallback nếu không có ảnh
-
-        groupedProducts[categoryId].push({
-          ProductID: product._id,
-          CategoryID: product.categoryID,
-          Name: product.name,
-          Price: product.price.toLocaleString('vi-VN'), // Định dạng giá
-          Rating: 4.0, // Giả lập rating vì API không cung cấp
-          Image: imageURLs[0], // Lấy ảnh đầu tiên
-        });
-      }
-
-      setProductsByCategory(groupedProducts);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      Alert.alert('Lỗi', 'Không thể tải sản phẩm. Vui lòng thử lại sau.');
-    }
-  };
-
-  // Hàm ánh xạ tên danh mục với icon
-  const getIconForCategory = (name) => {
-    switch (name) {
-      case 'Áo Khoác':
-        return 'jacket-outline';
-      case 'Áo Polo':
-        return 'shirt-outline';
-      case 'Áo Thun':
-        return 'shirt-outline';
-      case 'Áo Sơ Mi':
-        return 'shirt-outline';
-      case 'Quần Dài':
-        return 'man-outline';
-      case 'Quần Đùi':
-        return 'man-outline';
-      default:
-        return 'cube-outline';
-    }
-  };
+  const [favorites, setFavorites] = useState<string[]>([]); // Lưu danh sách ProductID yêu thích
 
   useEffect(() => {
     loadUser();
-    fetchCategories(); // Gọi API danh mục
-    fetchProducts(); // Gọi API sản phẩm
+    loadFavorites(); // Tải danh sách yêu thích
 
     Animated.timing(fadeAnim, {
       toValue: 1,
@@ -120,6 +45,63 @@ export default function HomeScreen() {
     }).start();
   }, []);
 
+  // Tải danh sách yêu thích từ AsyncStorage
+  const loadFavorites = async () => {
+    try {
+      const storedFavorites = await AsyncStorage.getItem('favorites');
+      if (storedFavorites) {
+        setFavorites(JSON.parse(storedFavorites));
+      }
+    } catch (err) {
+      console.error('Lỗi khi tải danh sách yêu thích:', err);
+    }
+  };
+
+  // Lưu danh sách yêu thích vào AsyncStorage
+  const saveFavorites = async (updatedFavorites: string[]) => {
+    try {
+      await AsyncStorage.setItem('favorites', JSON.stringify(updatedFavorites));
+      setFavorites(updatedFavorites);
+    } catch (err) {
+      console.error('Lỗi khi lưu danh sách yêu thích:', err);
+    }
+  };
+
+  // Thêm/xóa sản phẩm khỏi danh sách yêu thích
+  const toggleFavorite = (productId: string) => {
+    if (!user?._id) {
+      Alert.alert('Lỗi', 'Vui lòng đăng nhập để thêm vào danh sách yêu thích.');
+      return;
+    }
+    const isFavorited = favorites.includes(productId);
+    const updatedFavorites = isFavorited
+      ? favorites.filter((id) => id !== productId)
+      : [...favorites, productId];
+    saveFavorites(updatedFavorites);
+    Alert.alert('Thành công', isFavorited ? 'Đã xóa khỏi danh sách yêu thích.' : 'Đã thêm vào danh sách yêu thích.');
+  };
+
+  // Thêm sản phẩm vào giỏ hàng
+  const addToCart = async (product: any) => {
+    try {
+      const cart = await AsyncStorage.getItem('cart');
+      let cartItems = cart ? JSON.parse(cart) : [];
+      const existingItem = cartItems.find((item: any) => item.ProductID === product.ProductID);
+
+      if (existingItem) {
+        existingItem.quantity = (existingItem.quantity || 1) + 1;
+      } else {
+        cartItems.push({ ...product, quantity: 1 });
+      }
+
+      await AsyncStorage.setItem('cart', JSON.stringify(cartItems));
+      Alert.alert('Thành công', `${product.Name} đã được thêm vào giỏ hàng!`);
+    } catch (err) {
+      console.error('Lỗi khi thêm vào giỏ hàng:', err);
+      Alert.alert('Lỗi', 'Không thể thêm sản phẩm vào giỏ hàng.');
+    }
+  };
+
   const handleLogout = async () => {
     await AsyncStorage.removeItem('isLoggedIn');
     setUser(null);
@@ -127,8 +109,26 @@ export default function HomeScreen() {
     Alert.alert('Đăng xuất', 'Bạn đã đăng xuất thành công.');
   };
 
-  const navigateToCategory = (categoryId) => router.push({ pathname: './products', params: { categoryId } });
-  const navigateToProductDetail = (productId) => router.push({ pathname: './productDetail', params: { productId } });
+  const navigateToCategory = (categoryId: string) =>
+    router.push({ pathname: './products', params: { categoryId } });
+  const navigateToProductDetail = (productId: string) =>
+    router.push({ pathname: './productDetail', params: { productId } });
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#d4af37" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -148,7 +148,10 @@ export default function HomeScreen() {
           <View style={styles.bannerOverlay}>
             <Text style={styles.bannerTitle}>New Collection</Text>
             <Text style={styles.bannerSubtitle}>Discount 50% for transactions</Text>
-            <TouchableOpacity style={styles.bannerButton} onPress={() => navigateToCategory(categories[0]?.CategoryID)}>
+            <TouchableOpacity
+              style={styles.bannerButton}
+              onPress={() => navigateToCategory(categories[0]?.CategoryID || '')}
+            >
               <Text style={styles.bannerButtonText}>SHOP NOW</Text>
             </TouchableOpacity>
           </View>
@@ -158,7 +161,7 @@ export default function HomeScreen() {
         <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim }] }]}>
           <View style={styles.categoryHeader}>
             <Text style={styles.sectionTitle}>Danh Mục</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => navigateToCategory('')}>
               <Text style={styles.viewAllText}>Xem tất cả</Text>
             </TouchableOpacity>
           </View>
@@ -180,8 +183,8 @@ export default function HomeScreen() {
 
         {/* Sản phẩm theo danh mục */}
         {categories.map((category) => {
-          const products = productsByCategory[category.CategoryID];
-          if (!products || products.length === 0) return null;
+          const categoryProducts = getProductsByCategory(category.CategoryID);
+          if (!categoryProducts || categoryProducts.length === 0) return null;
 
           return (
             <Animated.View
@@ -190,26 +193,46 @@ export default function HomeScreen() {
             >
               <View style={styles.categoryHeader}>
                 <Text style={styles.sectionTitle}>{category.Name}</Text>
-                <TouchableOpacity>
+                <TouchableOpacity onPress={() => navigateToCategory(category.CategoryID)}>
                   <Text style={styles.viewAllText}>Tất cả</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.gridContainer}>
-                {products.map((product) => (
+                {categoryProducts.map((product) => (
                   <TouchableOpacity
                     key={product.ProductID}
                     style={styles.productCard}
                     onPress={() => navigateToProductDetail(product.ProductID)}
                   >
-                    <Image source={{ uri: product.Image }} style={styles.productImage} />
+                    <View style={styles.imageContainer}>
+                      <Image source={{ uri: product.Image }} style={styles.productImage} />
+                      <TouchableOpacity
+                        style={styles.favoriteButton}
+                        onPress={() => toggleFavorite(product.ProductID)}
+                      >
+                        <Ionicons
+                          name={favorites.includes(product.ProductID) ? 'heart' : 'heart-outline'}
+                          size={20}
+                          color={favorites.includes(product.ProductID) ? '#FF0000' : '#8B4513'}
+                        />
+                      </TouchableOpacity>
+                    </View>
                     <View style={styles.productInfo}>
-                      <Text style={styles.productName}>{product.Name}</Text>
+                      <Text style={styles.productName} numberOfLines={1} ellipsizeMode="tail">
+                        {product.Name}
+                      </Text>
                       <View style={styles.ratingContainer}>
                         <Ionicons name="star" size={14} color="#FFD700" />
                         <Text style={styles.ratingText}>{product.Rating}</Text>
                       </View>
                       <Text style={styles.productPrice}>{product.Price}đ</Text>
                     </View>
+                    <TouchableOpacity
+                      style={styles.addToCartButton}
+                      onPress={() => addToCart(product)}
+                    >
+                      <Text style={styles.addToCartText}>Thêm vào giỏ</Text>
+                    </TouchableOpacity>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -221,7 +244,6 @@ export default function HomeScreen() {
   );
 }
 
-// Styles giữ nguyên như code gốc
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -346,11 +368,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 5,
   },
+  imageContainer: {
+    position: 'relative',
+  },
   productImage: {
     width: '100%',
     height: 150,
     resizeMode: 'cover',
     borderRadius: 10,
+  },
+  favoriteButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 15,
+    padding: 5,
   },
   productInfo: {
     marginTop: 10,
@@ -377,5 +410,18 @@ const styles = StyleSheet.create({
     color: '#8B4513',
     fontWeight: '600',
     textAlign: 'center',
+  },
+  addToCartButton: {
+    backgroundColor: '#8B4513',
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 20,
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  addToCartText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

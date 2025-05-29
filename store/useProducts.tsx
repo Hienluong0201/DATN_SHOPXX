@@ -1,52 +1,5 @@
-// store/useProducts.tsx
 import { createContext, useContext, useState, useEffect, FC, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Dữ liệu mẫu
-const mockCategories = [
-  { CategoryID: 1, Name: 'Áo Nam', Description: 'Áo thời trang dành cho nam' },
-  { CategoryID: 2, Name: 'Quần Nam', Description: 'Quần phong cách dành cho nam' },
-  { CategoryID: 3, Name: 'Phụ Kiện', Description: 'Phụ kiện thời trang' },
-];
-
-const mockProducts = [
-  {
-    ProductID: 1,
-    CategoryID: 1,
-    Name: 'Áo Polo Nam',
-    Description: 'Áo Polo cao cấp',
-    Price: '499.000 VNĐ',
-    Image: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg',
-  },
-  {
-    ProductID: 2,
-    CategoryID: 2,
-    Name: 'Quần Jeans',
-    Description: 'Quần Jeans thời thượng',
-    Price: '799.000 VNĐ',
-    Image: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg',
-  },
-  {
-    ProductID: 3,
-    CategoryID: 3,
-    Name: 'Dây Lưng Da',
-    Description: 'Dây lưng cao cấp',
-    Price: '299.000 VNĐ',
-    Image: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg',
-  },
-];
-
-const mockCart = [
-  {
-    CartID: 1,
-    UserID: 1,
-    VariantID: 1,
-    Quantity: 2,
-    Name: 'Áo Polo Nam',
-    Price: '499.000 VNĐ',
-    Image: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg',
-  },
-];
+import AxiosInstance from '../axiosInstance/AxiosInstance';
 
 interface ProductContextType {
   categories: any[];
@@ -55,8 +8,8 @@ interface ProductContextType {
   wishlist: any[];
   loading: boolean;
   error: string | null;
-  getProductById: (id: number) => any | undefined;
-  getProductsByCategory: (categoryId: number) => any[];
+  getProductById: (id: string) => any | undefined;
+  getProductsByCategory: (categoryId: string) => any[];
   addToCart: (product: any, quantity: number) => void;
   addToWishlist: (product: any) => void;
   fetchData: () => Promise<void>;
@@ -75,31 +28,89 @@ export const ProductProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const storedCategories = await AsyncStorage.getItem('categories');
-      const storedProducts = await AsyncStorage.getItem('products');
-      if (storedCategories && storedProducts) {
-        setCategories(JSON.parse(storedCategories));
-        setProducts(JSON.parse(storedProducts));
-      } else {
-        await AsyncStorage.setItem('categories', JSON.stringify(mockCategories));
-        await AsyncStorage.setItem('products', JSON.stringify(mockProducts));
-        setCategories(mockCategories);
-        setProducts(mockProducts);
-      }
-      setCart(mockCart); // Khởi tạo giỏ hàng với dữ liệu mẫu
+      // Lấy danh mục
+      const categoryResponse = await AxiosInstance().get('/category');
+      console.log('categoryResponse:', categoryResponse);
+
+      const fetchedCategories = categoryResponse.map((category) => ({
+        CategoryID: category._id,
+        Name: category.name,
+        Icon: getIconForCategory(category.name),
+        Description: category.description || '',
+        Status: category.status || true,
+      }));
+      console.log('fetchedCategories:', fetchedCategories);
+      setCategories(fetchedCategories);
+
+      // Lấy sản phẩm
+      const productResponse = await AxiosInstance().get('/products?limit=100');
+      console.log('productResponse:', productResponse);
+
+      const fetchedProducts = await Promise.all(
+        (productResponse.products || []).map(async (product) => {
+          let imageURLs = ['https://via.placeholder.com/150'];
+          try {
+            const imageResponse = await AxiosInstance().get(`/img?productID=${product._id}`);
+            imageURLs = imageResponse[0]?.imageURL || imageURLs;
+          } catch (imgError) {
+            console.warn(`Failed to fetch image for product ${product._id}:`, imgError);
+            // Sử dụng hình ảnh mặc định nếu lỗi
+          }
+          return {
+            ProductID: product._id,
+            CategoryID: product.categoryID || '',
+            Name: product.name,
+            Description: product.description || '',
+            Price: product.price.toLocaleString('vi-VN'),
+            Image: imageURLs[0],
+            Rating: 4.0,
+          };
+        })
+      );
+      console.log('fetchedProducts:', fetchedProducts);
+      setProducts(fetchedProducts);
+
+      // TODO: Gọi API để lấy giỏ hàng nếu có
+      // Ví dụ: const cartResponse = await AxiosInstance().get('/cart');
+      // setCart(cartResponse);
+
+      // TODO: Gọi API để lấy wishlist nếu có
+      // Ví dụ: const wishlistResponse = await AxiosInstance().get('/wishlist');
+      // setWishlist(wishlistResponse);
     } catch (err) {
-      setError('Failed to fetch or store data');
-      setCategories(mockCategories); // Fallback to mock data
-      setProducts(mockProducts);
-      setCart(mockCart);
+      console.error('Error fetching data:', err);
+      setError('Không thể tải dữ liệu. Vui lòng thử lại sau.');
+      setCategories([]);
+      setProducts([]);
+      setCart([]);
+      setWishlist([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const getProductById = (id: number) => products.find((p) => p.ProductID === id);
+  const getIconForCategory = (name: string) => {
+    switch (name) {
+      case 'Áo Khoác':
+        return 'jacket-outline';
+      case 'Áo Polo':
+        return 'shirt-outline';
+      case 'Áo Thun':
+        return 'shirt-outline';
+      case 'Áo Sơ Mi':
+        return 'shirt-outline';
+      case 'Quần Dài':
+        return 'man-outline';
+      case 'Quần Đùi':
+        return 'man-outline';
+      default:
+        return 'cube-outline';
+    }
+  };
 
-  const getProductsByCategory = (categoryId: number) =>
+  const getProductById = (id: string) => products.find((p) => p.ProductID === id);
+
+  const getProductsByCategory = (categoryId: string) =>
     products.filter((p) => p.CategoryID === categoryId);
 
   const addToCart = (product: any, quantity: number) => {

@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image } from 'react-native';
+// app/home/cart.tsx
 import { router } from 'expo-router';
-import { useProducts } from '../../store/useProducts';
-import ProductCard from '../components/ProductCard';
+import React from 'react';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useProducts } from '../../../store/useProducts';
 
 const Cart = () => {
   const { cart, loading, error } = useProducts();

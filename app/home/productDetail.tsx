@@ -1,24 +1,22 @@
+// app/home/productDetail.tsx
 import React, { useState } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useProducts } from '../../store/useProducts';
-import Cart from './cart';
 
 const ProductDetail = () => {
   const { productId } = useLocalSearchParams();
   const { getProductById, addToCart, loading, error } = useProducts();
-  const [selectedVariant, setSelectedVariant] = useState({ Size: 'M', Color: 'Nâu', Stock: 50 });
-
   const product = getProductById(Number(productId));
-  const variants = [
-    { VariantID: 1, ProductID: Number(productId), Size: 'M', Color: 'Nâu', Stock: 50 },
-    { VariantID: 2, Size: 'L', Color: 'Đen', Stock: 30 },
-  ];
+
+  // TODO: Gọi API để lấy biến thể sản phẩm nếu có
+  // Ví dụ: const variantResponse = await AxiosInstance().get(`/variants?productID=${productId}`);
+  const [selectedVariant, setSelectedVariant] = useState(null);
 
   const handleAddToCart = () => {
     if (product) {
-      addToCart({ ...product, ...selectedVariant }, 1);
-      router.push('./home/cart');
+      addToCart({ ...product, variant: selectedVariant }, 1);
+      router.push('./cart');
     }
   };
 
@@ -49,18 +47,16 @@ const ProductDetail = () => {
         <Text style={styles.price}>{product.Price}</Text>
         <Text style={styles.description}>{product.Description}</Text>
         <Text style={styles.section}>Chọn biến thể:</Text>
-        {variants.map((variant) => (
+        {selectedVariant ? (
           <TouchableOpacity
-            key={variant.VariantID}
-            style={[
-              styles.variantCard,
-              selectedVariant.VariantID === variant.VariantID && styles.selectedVariant,
-            ]}
-            onPress={() => setSelectedVariant(variant)}
+            style={styles.variantCard}
+            onPress={() => setSelectedVariant(selectedVariant)}
           >
-            <Text>Size: {variant.Size}, Màu: {variant.Color}, Tồn: {variant.Stock}</Text>
+            <Text>Size: {selectedVariant.Size}, Màu: {selectedVariant.Color}, Tồn: {selectedVariant.Stock}</Text>
           </TouchableOpacity>
-        ))}
+        ) : (
+          <Text style={styles.emptyText}>Không có biến thể nào</Text>
+        )}
         <TouchableOpacity style={styles.button} onPress={handleAddToCart}>
           <Text style={styles.buttonText}>Thêm vào giỏ</Text>
         </TouchableOpacity>
@@ -93,6 +89,7 @@ const styles = StyleSheet.create({
   },
   backText: { color: '#fff', fontSize: 16 },
   errorText: { fontSize: 16, color: '#c0392b', textAlign: 'center', marginTop: 20 },
+  emptyText: { fontSize: 16, color: '#2c2c2c', textAlign: 'center', marginTop: 10 },
 });
 
 export default ProductDetail;

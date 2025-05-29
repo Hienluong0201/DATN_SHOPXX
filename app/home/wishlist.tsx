@@ -1,26 +1,53 @@
+// app/home/wishlist.tsx
 import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image } from 'react-native';
 import { useAuth } from '../../store/useAuth';
 import { router } from 'expo-router';
+import { useProducts } from '../../store/useProducts';
 
-const wishlist = () => {
+const Wishlist = () => {
   const { user } = useAuth();
-  const sampleWishlist = [{ WishlistID: 1, UserID: 1, ProductID: 1, Name: 'Áo Polo Nam', Price: '499.000 VNĐ', Image: 'https://media3.coolmate.me/cdn-cgi/image/width=672,height=990,quality=80,format=auto/uploads/January2024/AT.220.NAU.1.jpg' }];
+  const { wishlist, loading, error } = useProducts();
 
-  const navigateToProductDetail = (productId) => router.push({ pathname: '/productDetail', params: { productId } });
+  const navigateToProductDetail = (productId: string) =>
+    router.push({ pathname: '/productDetail', params: { productId } });
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#d4af37" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Danh sách yêu thích</Text>
-      {sampleWishlist.map((item) => (
-        <TouchableOpacity key={item.WishlistID} style={styles.card} onPress={() => navigateToProductDetail(item.ProductID)}>
-          <Image source={{ uri: item.Image }} style={styles.image} />
-          <View style={styles.info}>
-            <Text style={styles.name}>{item.Name}</Text>
-            <Text style={styles.price}>{item.Price}</Text>
-          </View>
-        </TouchableOpacity>
-      ))}
+      {wishlist.length === 0 ? (
+        <Text style={styles.emptyText}>Danh sách yêu thích trống</Text>
+      ) : (
+        wishlist.map((item) => (
+          <TouchableOpacity
+            key={item.WishlistID}
+            style={styles.card}
+            onPress={() => navigateToProductDetail(item.ProductID)}
+          >
+            <Image source={{ uri: item.Image }} style={styles.image} />
+            <View style={styles.info}>
+              <Text style={styles.name}>{item.Name}</Text>
+              <Text style={styles.price}>{item.Price}</Text>
+            </View>
+          </TouchableOpacity>
+        ))
+      )}
     </ScrollView>
   );
 };
@@ -33,6 +60,8 @@ const styles = StyleSheet.create({
   info: { marginLeft: 10, justifyContent: 'center' },
   name: { fontSize: 16, fontWeight: '600', color: '#2c2c2c' },
   price: { fontSize: 14, color: '#c0392b', fontWeight: '700' },
+  emptyText: { fontSize: 16, color: '#2c2c2c', textAlign: 'center', marginTop: 20 },
+  errorText: { fontSize: 16, color: '#c0392b', textAlign: 'center', marginTop: 20 },
 });
 
-export default wishlist;
+export default Wishlist;

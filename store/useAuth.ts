@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 
 // Định nghĩa type User với các trường từ API
 type User = {
@@ -11,7 +12,7 @@ type User = {
   createdAt: string;
   updatedAt: string;
   __v: number;
-  phone?: string; // Giữ lại phone như trường tùy chọn
+  phone?: string;
 };
 
 type AuthState = {
@@ -22,29 +23,51 @@ type AuthState = {
   setUser: (user: User | null) => void;
 };
 
+// Hàm kiểm tra dữ liệu User có hợp lệ không
+const isValidUser = (data: any): data is User => {
+  return (
+    data &&
+    typeof data === 'object' &&
+    typeof data._id === 'string' &&
+    typeof data.name === 'string' &&
+    typeof data.email === 'string' &&
+    typeof data.role === 'string' &&
+    typeof data.isActive === 'boolean' &&
+    typeof data.createdAt === 'string' &&
+    typeof data.updatedAt === 'string' &&
+    typeof data.__v === 'number'
+  );
+};
+
 export const useAuth = create<AuthState>((set, get) => ({
   user: null,
 
   login: async (user: User) => {
     try {
-      // Lưu trạng thái đăng nhập và thông tin người dùng vào AsyncStorage
+      if (!isValidUser(user)) {
+        throw new Error('Invalid user data');
+      }
       await AsyncStorage.setItem('isLoggedIn', 'true');
       await AsyncStorage.setItem('user', JSON.stringify(user));
       set({ user });
     } catch (error) {
       console.error('Error saving user to AsyncStorage:', error);
+      Alert.alert('Lỗi', 'Không thể đăng nhập. Vui lòng thử lại.');
       throw error;
     }
   },
 
   logout: async () => {
     try {
-      // Xóa thông tin đăng nhập và người dùng khỏi AsyncStorage
-      await AsyncStorage.removeItem('isLoggedIn');
-      await AsyncStorage.removeItem('user');
-      set({ user: null });
+      const isLoggedIn = await AsyncStorage.getItem('isLoggedIn');
+      if (isLoggedIn === 'true') {
+        await AsyncStorage.removeItem('isLoggedIn');
+        await AsyncStorage.removeItem('user');
+        set({ user: null });
+      }
     } catch (error) {
       console.error('Error logging out:', error);
+      Alert.alert('Lỗi', 'Không thể đăng xuất. Vui lòng thử lại.');
       throw error;
     }
   },
@@ -53,19 +76,35 @@ export const useAuth = create<AuthState>((set, get) => ({
     try {
       const userData = await AsyncStorage.getItem('user');
       if (userData) {
-        const parsedUser: User = JSON.parse(userData);
-        // Chỉ set user nếu khác user hiện tại để tránh setState liên tục
-        if (JSON.stringify(get().user) !== JSON.stringify(parsedUser)) {
+        let parsedUser: User;
+        try {
+          parsedUser = JSON.parse(userData);
+        } catch (parseError) {
+          console.error('Error parsing user data:', parseError);
+          set({ user: null });
+          return;
+        }
+
+        if (!isValidUser(parsedUser)) {
+          console.error('Invalid user data in AsyncStorage');
+          set({ user: null });
+          return;
+        }
+
+        const currentUser = get().user;
+        // So sánh nông để tối ưu hiệu suất
+        if (!currentUser || currentUser._id !== parsedUser._id) {
           set({ user: parsedUser });
         }
       } else {
-        // Nếu không có user trong AsyncStorage thì clear luôn
-        if (get().user !== null) {
+        const currentUser = get().user;
+        if (currentUser !== null) {
           set({ user: null });
         }
       }
     } catch (error) {
       console.error('Error loading user from AsyncStorage:', error);
+      set({ user: null });
     }
   },
 

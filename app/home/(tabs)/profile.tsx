@@ -1,17 +1,17 @@
+import { FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  Image,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import { useAuth } from '../../store/useAuth';
-import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+import { useAuth } from '../../../store/useAuth';
 
 const ProfileScreen = () => {
   const { user, loadUser, setUser } = useAuth();

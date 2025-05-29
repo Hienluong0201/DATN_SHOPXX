@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import CartScreen from '../cart';
-import IndexScreen from '../index';
-import ProfileScreen from '../profile';
-import ReviewsScreen from '../reviews';
+import { StyleSheet, View } from 'react-native';
+import CartScreen from './cart';
+import IndexScreen from './index';
+import ProfileScreen from './profile';
+import ReviewsScreen from './reviews';
 
 const Tab = createBottomTabNavigator();
 
@@ -33,10 +33,10 @@ export default function TabLayout() {
         },
       })}
     >
-      <Tab.Screen name="index" component={IndexScreen} />
-      <Tab.Screen name="cart" component={CartScreen} />
-      <Tab.Screen name="reviews" component={ReviewsScreen} />
-      <Tab.Screen name="profile" component={ProfileScreen} />
+      <Tab.Screen name="index" component={IndexScreen} options={{ title: 'Trang chủ' }} />
+      <Tab.Screen name="cart" component={CartScreen} options={{ title: 'Giỏ hàng' }} />
+      <Tab.Screen name="reviews" component={ReviewsScreen} options={{ title: 'Đánh giá' }} />
+      <Tab.Screen name="profile" component={ProfileScreen} options={{ title: 'Hồ sơ' }} />
     </Tab.Navigator>
   );
 }
@@ -45,8 +45,8 @@ const styles = StyleSheet.create({
   tabBar: {
     position: 'absolute',
     bottom: 20,
-    left: 40, // Tăng padding bên trái để "bóp" vào
-    right: 40, // Tăng padding bên phải để "bóp" vào
+    left: 40,
+    right: 40,
     height: 70,
     borderRadius: 35,
     backgroundColor: '#8B4513',
