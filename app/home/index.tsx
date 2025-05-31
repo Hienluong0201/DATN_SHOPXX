@@ -15,8 +15,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useAuth } from '../../../store/useAuth';
-import { useProducts } from '../../../store/useProducts';
+import { useAuth } from '../../store/useAuth';
+import { useProducts } from '../../store/useProducts';
 
 export default function HomeScreen() {
   const { user, loadUser, setUser } = useAuth();

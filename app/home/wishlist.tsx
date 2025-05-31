@@ -1,6 +1,6 @@
 // app/home/wishlist.tsx
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image,ActivityIndicator } from 'react-native';
 import { useAuth } from '../../store/useAuth';
 import { router } from 'expo-router';
 import { useProducts } from '../../store/useProducts';
@@ -10,7 +10,7 @@ const Wishlist = () => {
   const { wishlist, loading, error } = useProducts();
 
   const navigateToProductDetail = (productId: string) =>
-    router.push({ pathname: '/productDetail', params: { productId } });
+    router.push({ pathname: './productDetail', params: { productId } });
 
   if (loading) {
     return (
