@@ -2,7 +2,7 @@
 import { router } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useProducts } from '../../../store/useProducts';
+import { useProducts } from '../../store/useProducts';
 
 const Cart = () => {
   const { cart, loading, error } = useProducts();

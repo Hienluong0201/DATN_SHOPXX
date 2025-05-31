@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useAuth } from '../../../store/useAuth';
+import { useAuth } from '../../store/useAuth';
 
 const ProfileScreen = () => {
   const { user, loadUser, setUser } = useAuth();
