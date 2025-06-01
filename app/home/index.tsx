@@ -8,26 +8,32 @@ import {
   Animated,
   Easing,
   Image,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  ScrollView,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useAuth } from '../../store/useAuth';
 import { useProducts } from '../../store/useProducts';
+import AdvancedFilterModal from '../components/AdvancedFilterModal';
 
 export default function HomeScreen() {
   const { user, loadUser, setUser } = useAuth();
   const { categories, products, getProductsByCategory, loading, error } = useProducts();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
-  const [favorites, setFavorites] = useState<string[]>([]); // Lưu danh sách ProductID yêu thích
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [priceRange, setPriceRange] = useState([0, 1000000]);
+  const [selectedRating, setSelectedRating] = useState(0);
+  const [selectedCategory, setSelectedCategory] = useState('');
 
   useEffect(() => {
     loadUser();
-    loadFavorites(); // Tải danh sách yêu thích
+    loadFavorites();
 
     Animated.timing(fadeAnim, {
       toValue: 1,
@@ -45,7 +51,6 @@ export default function HomeScreen() {
     }).start();
   }, []);
 
-  // Tải danh sách yêu thích từ AsyncStorage
   const loadFavorites = async () => {
     try {
       const storedFavorites = await AsyncStorage.getItem('favorites');
@@ -57,7 +62,6 @@ export default function HomeScreen() {
     }
   };
 
-  // Lưu danh sách yêu thích vào AsyncStorage
   const saveFavorites = async (updatedFavorites: string[]) => {
     try {
       await AsyncStorage.setItem('favorites', JSON.stringify(updatedFavorites));
@@ -67,7 +71,6 @@ export default function HomeScreen() {
     }
   };
 
-  // Thêm/xóa sản phẩm khỏi danh sách yêu thích
   const toggleFavorite = (productId: string) => {
     if (!user?._id) {
       Alert.alert('Lỗi', 'Vui lòng đăng nhập để thêm vào danh sách yêu thích.');
@@ -81,7 +84,6 @@ export default function HomeScreen() {
     Alert.alert('Thành công', isFavorited ? 'Đã xóa khỏi danh sách yêu thích.' : 'Đã thêm vào danh sách yêu thích.');
   };
 
-  // Thêm sản phẩm vào giỏ hàng
   const addToCart = async (product: any) => {
     try {
       const cart = await AsyncStorage.getItem('cart');
@@ -114,6 +116,20 @@ export default function HomeScreen() {
   const navigateToProductDetail = (productId: string) =>
     router.push({ pathname: './productDetail', params: { productId } });
 
+  const applyFilters = () => {
+    setFilterModalVisible(false);
+  };
+
+  const filteredProducts = (categoryId: string) => {
+    let categoryProducts = getProductsByCategory(categoryId);
+    return categoryProducts.filter((product) => {
+      const matchesPrice = product.Price >= priceRange[0] && product.Price <= priceRange[1];
+      const matchesRating = product.Rating >= selectedRating;
+      const matchesCategory = selectedCategory ? product.CategoryID === selectedCategory : true;
+      return matchesPrice && matchesRating && matchesCategory;
+    });
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -130,116 +146,152 @@ export default function HomeScreen() {
     );
   }
 
+  const data = [
+    { type: 'search', id: 'search' },
+    { type: 'banner', id: 'banner' },
+    { type: 'categories', id: 'categories' },
+    ...categories.map((category) => ({
+      type: 'products',
+      id: category.CategoryID,
+      category,
+    })),
+  ];
+
+  const renderItem = ({ item }: any) => {
+    switch (item.type) {
+      case 'search':
+        return (
+          <View style={styles.searchContainer}>
+            <TextInput style={styles.searchInput} placeholder="Tìm kiếm" placeholderTextColor="#999" />
+            <MaterialIcons name="search" size={24} color="#8B4513" style={styles.searchIcon} />
+            <TouchableOpacity onPress={() => setFilterModalVisible(true)}>
+              <MaterialIcons name="filter-list" size={24} color="#8B4513" style={styles.filterIcon} />
+            </TouchableOpacity>
+          </View>
+        );
+      case 'banner':
+        return (
+          <Animated.View style={[styles.bannerContainer, { opacity: fadeAnim }]}>
+            <Image
+              source={{ uri: 'https://via.placeholder.com/400x150.png?text=New+Collection' }}
+              style={styles.bannerImage}
+            />
+            <View style={styles.bannerOverlay}>
+              <Text style={styles.bannerTitle}>New Collection</Text>
+              <Text style={styles.bannerSubtitle}>Discount 50% for transactions</Text>
+              <TouchableOpacity
+                style={styles.bannerButton}
+                onPress={() => navigateToCategory(categories[0]?.CategoryID || '')}
+              >
+                <Text style={styles.bannerButtonText}>SHOP NOW</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        );
+      case 'categories':
+        return (
+          <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim }] }]}>
+            <View style={styles.categoryHeader}>
+              <Text style={styles.sectionTitle}>Danh Mục</Text>
+              <TouchableOpacity onPress={() => navigateToCategory('')}>
+                <Text style={styles.viewAllText}>Xem tất cả</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryContainer}>
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category.CategoryID}
+                  style={styles.categoryCard}
+                  onPress={() => navigateToCategory(category.CategoryID)}
+                >
+                  <View style={styles.categoryIcon}>
+                    <Ionicons name={category.Icon} size={30} color="#8B4513" />
+                  </View>
+                  <Text style={styles.categoryName}>{category.Name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Animated.View>
+        );
+      case 'products':
+        const categoryProducts = filteredProducts(item.category.CategoryID);
+        if (!categoryProducts || categoryProducts.length === 0) return null;
+
+        return (
+          <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim }] }]}>
+            <View style={styles.categoryHeader}>
+              <Text style={styles.sectionTitle}>{item.category.Name}</Text>
+              <TouchableOpacity onPress={() => navigateToCategory(item.category.CategoryID)}>
+                <Text style={styles.viewAllText}>Tất cả</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.gridContainer}>
+              {categoryProducts.map((product) => (
+                <TouchableOpacity
+                  key={product.ProductID}
+                  style={styles.productCard}
+                  onPress={() => navigateToProductDetail(product.ProductID)}
+                >
+                  <View style={styles.imageContainer}>
+                    <Image source={{ uri: product.Image }} style={styles.productImage} />
+                    <TouchableOpacity
+                      style={styles.favoriteButton}
+                      onPress={() => toggleFavorite(product.ProductID)}
+                    >
+                      <Ionicons
+                        name={favorites.includes(product.ProductID) ? 'heart' : 'heart-outline'}
+                        size={20}
+                        color={favorites.includes(product.ProductID) ? '#FF0000' : '#8B4513'}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.productInfo}>
+                    <Text style={styles.productName} numberOfLines={1} ellipsizeMode="tail">
+                      {product.Name}
+                    </Text>
+                    <View style={styles.ratingContainer}>
+                      <Ionicons name="star" size={14} color="#FFD700" />
+                      <Text style={styles.ratingText}>{product.Rating}</Text>
+                    </View>
+                    <Text style={styles.productPrice}>{product.Price}đ</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.addToCartButton}
+                    onPress={() => addToCart(product)}
+                  >
+                    <Text style={styles.addToCartText}>Thêm vào giỏ</Text>
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Animated.View>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
-        {/* Thanh tìm kiếm */}
-        <View style={styles.searchContainer}>
-          <TextInput style={styles.searchInput} placeholder="Tìm kiếm" placeholderTextColor="#999" />
-          <MaterialIcons name="search" size={24} color="#8B4513" style={styles.searchIcon} />
-        </View>
-
-        {/* Banner quảng cáo */}
-        <Animated.View style={[styles.bannerContainer, { opacity: fadeAnim }]}>
-          <Image
-            source={{ uri: 'https://via.placeholder.com/400x150.png?text=New+Collection' }}
-            style={styles.bannerImage}
-          />
-          <View style={styles.bannerOverlay}>
-            <Text style={styles.bannerTitle}>New Collection</Text>
-            <Text style={styles.bannerSubtitle}>Discount 50% for transactions</Text>
-            <TouchableOpacity
-              style={styles.bannerButton}
-              onPress={() => navigateToCategory(categories[0]?.CategoryID || '')}
-            >
-              <Text style={styles.bannerButtonText}>SHOP NOW</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-
-        {/* Danh mục */}
-        <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim }] }]}>
-          <View style={styles.categoryHeader}>
-            <Text style={styles.sectionTitle}>Danh Mục</Text>
-            <TouchableOpacity onPress={() => navigateToCategory('')}>
-              <Text style={styles.viewAllText}>Xem tất cả</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryContainer}>
-            {categories.map((category) => (
-              <TouchableOpacity
-                key={category.CategoryID}
-                style={styles.categoryCard}
-                onPress={() => navigateToCategory(category.CategoryID)}
-              >
-                <View style={styles.categoryIcon}>
-                  <Ionicons name={category.Icon} size={30} color="#8B4513" />
-                </View>
-                <Text style={styles.categoryName}>{category.Name}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </Animated.View>
-
-        {/* Sản phẩm theo danh mục */}
-        {categories.map((category) => {
-          const categoryProducts = getProductsByCategory(category.CategoryID);
-          if (!categoryProducts || categoryProducts.length === 0) return null;
-
-          return (
-            <Animated.View
-              key={category.CategoryID}
-              style={[styles.section, { transform: [{ translateY: slideAnim }] }]}
-            >
-              <View style={styles.categoryHeader}>
-                <Text style={styles.sectionTitle}>{category.Name}</Text>
-                <TouchableOpacity onPress={() => navigateToCategory(category.CategoryID)}>
-                  <Text style={styles.viewAllText}>Tất cả</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.gridContainer}>
-                {categoryProducts.map((product) => (
-                  <TouchableOpacity
-                    key={product.ProductID}
-                    style={styles.productCard}
-                    onPress={() => navigateToProductDetail(product.ProductID)}
-                  >
-                    <View style={styles.imageContainer}>
-                      <Image source={{ uri: product.Image }} style={styles.productImage} />
-                      <TouchableOpacity
-                        style={styles.favoriteButton}
-                        onPress={() => toggleFavorite(product.ProductID)}
-                      >
-                        <Ionicons
-                          name={favorites.includes(product.ProductID) ? 'heart' : 'heart-outline'}
-                          size={20}
-                          color={favorites.includes(product.ProductID) ? '#FF0000' : '#8B4513'}
-                        />
-                      </TouchableOpacity>
-                    </View>
-                    <View style={styles.productInfo}>
-                      <Text style={styles.productName} numberOfLines={1} ellipsizeMode="tail">
-                        {product.Name}
-                      </Text>
-                      <View style={styles.ratingContainer}>
-                        <Ionicons name="star" size={14} color="#FFD700" />
-                        <Text style={styles.ratingText}>{product.Rating}</Text>
-                      </View>
-                      <Text style={styles.productPrice}>{product.Price}đ</Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.addToCartButton}
-                      onPress={() => addToCart(product)}
-                    >
-                      <Text style={styles.addToCartText}>Thêm vào giỏ</Text>
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </Animated.View>
-          );
-        })}
-      </ScrollView>
+      <FlashList
+        data={data}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        estimatedItemSize={200}
+        contentContainerStyle={styles.scrollContent}
+      />
+      <AdvancedFilterModal
+        visible={filterModalVisible}
+        onClose={() => setFilterModalVisible(false)}
+        priceRange={priceRange}
+        setPriceRange={setPriceRange}
+        selectedRating={selectedRating}
+        setSelectedRating={setSelectedRating}
+        selectedCategory={selectedCategory}
+        setSelectedCategory={setSelectedCategory}
+        categories={categories}
+        onApplyFilters={applyFilters}
+      />
     </View>
   );
 }
@@ -248,9 +300,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-  },
-  scrollContainer: {
-    flex: 1,
   },
   scrollContent: {
     paddingBottom: 80,
@@ -270,6 +319,9 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   searchIcon: {
+    marginLeft: 10,
+  },
+  filterIcon: {
     marginLeft: 10,
   },
   bannerContainer: {
@@ -423,5 +475,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  errorText: {
+    fontSize: 16,
+    color: 'red',
+    textAlign: 'center',
+    marginTop: 20,
   },
 });

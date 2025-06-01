@@ -2,13 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import IndexScreen from './index';
+import ReviewsScreen from '../reviews';
 import CartScreen from './cart';
-import CheckoutScreen from './checkout';
-import OrdersScreen from './orders';
-import ProductsScreen from './products';
+import IndexScreen from './index';
 import ProfileScreen from './profile';
-import ReviewsScreen from './reviews';
 import WishlistScreen from './wishlist';
 
 const Tab = createBottomTabNavigator();
@@ -29,9 +26,6 @@ export default function HomeLayout() {
           else if (route.name === 'reviews') iconName = 'chatbox-ellipses-outline';
           else if (route.name === 'profile') iconName = 'person-outline';
           else if (route.name === 'wishlist') iconName = 'heart-outline';
-          else if (route.name === 'products') iconName = 'grid-outline';
-          else if (route.name === 'orders') iconName = 'list-outline';
-          else if (route.name === 'checkout') iconName = 'card-outline';
 
           return (
             <View style={[styles.iconContainer, focused && styles.focusedIconContainer]}>
@@ -46,9 +40,6 @@ export default function HomeLayout() {
       <Tab.Screen name="reviews" component={ReviewsScreen} options={{ title: 'Đánh giá' }} />
       <Tab.Screen name="profile" component={ProfileScreen} options={{ title: 'Hồ sơ' }} />
       <Tab.Screen name="wishlist" component={WishlistScreen} options={{ title: 'Yêu thích' }} />
-      <Tab.Screen name="products" component={ProductsScreen} options={{ title: 'Sản phẩm' }} />
-      <Tab.Screen name="orders" component={OrdersScreen} options={{ title: 'Đơn hàng' }} />
-      <Tab.Screen name="checkout" component={CheckoutScreen} options={{ title: 'Thanh toán' }} />
     </Tab.Navigator>
   );
 }

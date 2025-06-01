@@ -1,8 +1,8 @@
 // app/home/wishlist.tsx
-import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image,ActivityIndicator } from 'react-native';
-import { useAuth } from '../../store/useAuth';
 import { router } from 'expo-router';
+import React from 'react';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useAuth } from '../../store/useAuth';
 import { useProducts } from '../../store/useProducts';
 
 const Wishlist = () => {

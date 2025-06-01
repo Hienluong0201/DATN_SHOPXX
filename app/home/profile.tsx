@@ -1,205 +1,92 @@
-import { FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import React, { useEffect, useState } from 'react';
-import {
-  Alert,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { useAuth } from '../../store/useAuth';
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons'; // Sử dụng cả MaterialIcons và Ionicons
+import { router } from 'expo-router';
 
 const ProfileScreen = () => {
-  const { user, loadUser, setUser } = useAuth();
-
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('123 Lê Lợi, Q1, TP.HCM');
-  const [image, setImage] = useState(null);
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      await loadUser();
-    };
-    fetchUser();
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      setName(user.name || '');
-      setEmail(user.email || '');
-      setPhone(user.phone || '');
-      if (user.avatar) {
-        setImage(user.avatar);
-      }
-    }
-  }, [user]);
-
-  const pickImage = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Quyền bị từ chối', 'Bạn cần cho phép truy cập thư viện ảnh.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      setImage(result.assets[0].uri);
-    }
+  const navigateTo = (path: string) => {
+    router.push(path);
   };
 
-  const handleSave = () => {
-    if (!name || !email || !phone) {
-      Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin.');
-      return;
-    }
-
-    const updatedUser = {
-      ...user,
-      name,
-      email,
-      phone,
-      avatar: image,
-    };
-
-    setUser(updatedUser);
-    Alert.alert('Thành công', 'Thông tin hồ sơ đã được cập nhật.');
+  const goBack = () => {
+    router.back();
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>👤 Hồ sơ cá nhân</Text>
-
-      <TouchableOpacity onPress={pickImage} style={styles.imagePicker}>
-        {image ? (
-          <Image source={{ uri: image }} style={styles.avatar} />
-        ) : (
-          <View style={styles.avatarPlaceholder}>
-            <Ionicons name="camera" size={32} color="#888" />
-          </View>
-        )}
-        <Text style={styles.uploadText}>Tải ảnh lên</Text>
-      </TouchableOpacity>
-
-      <View style={styles.inputGroup}>
-        <FontAwesome5 name="user" size={18} color="#555" style={styles.icon} />
-        <TextInput
-          style={styles.input}
-          value={name}
-          onChangeText={setName}
-          placeholder="Tên đầy đủ"
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={goBack} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#2c2c2c" />
+        </TouchableOpacity>
+        <Text style={styles.title}>Hồ sơ</Text>
+        <View style={styles.placeholder} />
+      </View>
+      <View style={styles.profileSection}>
+        <Image
+          source={{ uri: 'https://example.com/avatar.jpg' }} // Thay bằng URL ảnh thực tế
+          style={styles.avatar}
         />
+        <Text style={styles.userName}>Võ Xuân Toàn</Text>
       </View>
-
-      <View style={styles.inputGroup}>
-        <MaterialIcons name="email" size={18} color="#555" style={styles.icon} />
-        <TextInput
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Email"
-          keyboardType="email-address"
-        />
+      <View style={styles.menuContainer}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/profileDetail')}>
+          <MaterialIcons name="person" size={24} color="#8B4513" />
+          <Text style={styles.menuText}>Hồ sơ cá nhân</Text>
+          <Ionicons name="chevron-forward" size={20} color="#8B4513" style={styles.chevron} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/payment')}>
+          <MaterialIcons name="payment" size={24} color="#8B4513" />
+          <Text style={styles.menuText}>Phương thức thanh toán</Text>
+          <Ionicons name="chevron-forward" size={20} color="#8B4513" style={styles.chevron} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/orders')}>
+          <MaterialIcons name="shopping-bag" size={24} color="#8B4513" />
+          <Text style={styles.menuText}>Đơn hàng của bạn</Text>
+          <Ionicons name="chevron-forward" size={20} color="#8B4513" style={styles.chevron} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/settings')}>
+          <MaterialIcons name="settings" size={24} color="#8B4513" />
+          <Text style={styles.menuText}>Cài đặt</Text>
+          <Ionicons name="chevron-forward" size={20} color="#8B4513" style={styles.chevron} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/help')}>
+          <MaterialIcons name="help" size={24} color="#8B4513" />
+          <Text style={styles.menuText}>Trợ giúp</Text>
+          <Ionicons name="chevron-forward" size={20} color="#8B4513" style={styles.chevron} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/privacy')}>
+          <MaterialIcons name="security" size={24} color="#8B4513" />
+          <Text style={styles.menuText}>Chính sách bảo mật</Text>
+          <Ionicons name="chevron-forward" size={20} color="#8B4513" style={styles.chevron} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/contact')}>
+          <MaterialIcons name="contact-mail" size={24} color="#8B4513" />
+          <Text style={styles.menuText}>Liên hệ</Text>
+          <Ionicons name="chevron-forward" size={20} color="#8B4513" style={styles.chevron} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('../login')}>
+          <MaterialIcons name="exit-to-app" size={24} color="#8B4513" />
+          <Text style={styles.menuText}>Đăng xuất</Text>
+          <Ionicons name="chevron-forward" size={20} color="#8B4513" style={styles.chevron} />
+        </TouchableOpacity>
       </View>
-
-      <View style={styles.inputGroup}>
-        <Ionicons name="call" size={18} color="#555" style={styles.icon} />
-        <TextInput
-          style={styles.input}
-          value={phone}
-          onChangeText={setPhone}
-          placeholder="Số điện thoại"
-          keyboardType="phone-pad"
-        />
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Ionicons name="location" size={18} color="#555" style={styles.icon} />
-        <TextInput
-          style={styles.input}
-          value={address}
-          onChangeText={setAddress}
-          placeholder="Địa chỉ"
-        />
-      </View>
-
-      <View style={styles.infoBox}>
-        <Text style={styles.infoText}>📌 Vai trò: {user?.role || 'N/A'}</Text>
-        <Text style={styles.infoText}>
-          ✅ Trạng thái: {user?.isActive ? 'Đang hoạt động' : 'Không hoạt động'}
-        </Text>
-        <Text style={styles.infoText}>
-          🕒 Ngày tạo: {new Date(user?.createdAt || '').toLocaleString()}
-        </Text>
-        <Text style={styles.infoText}>
-          🔁 Cập nhật: {new Date(user?.updatedAt || '').toLocaleString()}
-        </Text>
-      </View>
-
-      <TouchableOpacity style={styles.button} onPress={handleSave}>
-        <Text style={styles.buttonText}>💾 Lưu thông tin</Text>
-      </TouchableOpacity>
-    </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#f4f6f8' },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, color: '#333' },
-  imagePicker: { alignItems: 'center', marginBottom: 20 },
-  avatar: { width: 120, height: 120, borderRadius: 60, marginBottom: 10 },
-  avatarPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#e0e0e0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  uploadText: { color: '#007bff', fontWeight: '500' },
-
-  inputGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 10,
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    marginBottom: 15,
-  },
-  icon: { marginRight: 8 },
-  input: { flex: 1, fontSize: 16, paddingVertical: 12 },
-
-  infoBox: {
-    padding: 15,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    borderColor: '#eee',
-    borderWidth: 1,
-    marginBottom: 20,
-  },
-  infoText: { fontSize: 14, marginBottom: 5, color: '#444' },
-
-  button: {
-    backgroundColor: '#007bff',
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  container: { flex: 1, padding: 20, backgroundColor: '#f0f2f5' },
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  backButton: { padding: 5 },
+  title: { fontSize: 24, fontWeight: '700', color: '#1a1a1a', flex: 1, textAlign: 'center' },
+  placeholder: { width: 24 },
+  profileSection: { alignItems: 'center', marginBottom: 20 },
+  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#ddd', marginBottom: 10 },
+  userName: { fontSize: 18, fontWeight: '600', color: '#2c2c2c' },
+  menuContainer: { backgroundColor: '#fff', borderRadius: 15, padding: 15, elevation: 3 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  menuText: { fontSize: 16, color: '#2c2c2c', marginLeft: 15, flex: 1, fontWeight: '600' },
+  chevron: { marginLeft: 'auto' }, // Đẩy icon sang phải
 });
 
 export default ProfileScreen;
