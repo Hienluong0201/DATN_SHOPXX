@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { useProducts } from '../../store/useProducts';
+import { useProducts } from '../store/useProducts';
 
 const ProductDetail = () => {
   const { productId } = useLocalSearchParams();
