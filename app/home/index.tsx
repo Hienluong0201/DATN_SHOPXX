@@ -71,18 +71,50 @@ export default function HomeScreen() {
     }
   };
 
-  const toggleFavorite = (productId: string) => {
-    if (!user?._id) {
-      Alert.alert('Lỗi', 'Vui lòng đăng nhập để thêm vào danh sách yêu thích.');
-      return;
+ const toggleFavorite = async (productId: string) => {
+  if (!user?._id) {
+    Alert.alert('Lỗi', 'Vui lòng đăng nhập để thêm vào danh sách yêu thích.');
+    return;
+  }
+
+  const isFavorited = favorites.includes(productId);
+  try {
+    const response = await fetch('https://datn-sever.onrender.com/wishlist', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userID: user._id,
+        productID: productId,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-    const isFavorited = favorites.includes(productId);
-    const updatedFavorites = isFavorited
-      ? favorites.filter((id) => id !== productId)
-      : [...favorites, productId];
-    saveFavorites(updatedFavorites);
-    Alert.alert('Thành công', isFavorited ? 'Đã xóa khỏi danh sách yêu thích.' : 'Đã thêm vào danh sách yêu thích.');
-  };
+
+    const data = await response.json();
+    
+    // Cập nhật danh sách yêu thích cục bộ
+    let updatedFavorites;
+    if (isFavorited) {
+      updatedFavorites = favorites.filter((id) => id !== productId);
+      Alert.alert('Thành công', 'Đã xóa khỏi danh sách yêu thích.');
+    } else {
+      updatedFavorites = [...favorites, productId];
+      Alert.alert('Thành công', 'Đã thêm vào danh sách yêu thích.');
+    }
+
+    // Lưu danh sách yêu thích vào AsyncStorage
+    await AsyncStorage.setItem('favorites', JSON.stringify(updatedFavorites));
+    setFavorites(updatedFavorites);
+
+  } catch (error) {
+    console.error('Lỗi khi thêm/xóa yêu thích:', error);
+    Alert.alert('Lỗi', 'Không thể cập nhật danh sách yêu thích: ' + error.message);
+  }
+};
 
   const addToCart = async (product: any) => {
     try {
@@ -298,6 +330,7 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    top : 20,
     flex: 1,
     backgroundColor: '#fff',
   },

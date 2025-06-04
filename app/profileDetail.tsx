@@ -1,3 +1,4 @@
+import AxiosInstance from '../axiosInstance/AxiosInstance';
 import { FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
@@ -11,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { router } from 'expo-router'; // Thêm import router
 import { useAuth } from '../store/useAuth';
 
 const ProfileScreen = () => {
@@ -34,9 +36,7 @@ const ProfileScreen = () => {
       setName(user.name || '');
       setEmail(user.email || '');
       setPhone(user.phone || '');
-      if (user.avatar) {
-        setImage(user.avatar);
-      }
+      setImage(user.avatar || null);
     }
   }, [user]);
 
@@ -59,147 +59,236 @@ const ProfileScreen = () => {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name || !email || !phone) {
       Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin.');
       return;
     }
 
-    const updatedUser = {
-      ...user,
-      name,
-      email,
-      phone,
-      avatar: image,
-    };
+    try {
+      const formData = new FormData();
+      formData.append('name', name);
+      formData.append('phone', phone);
+      formData.append('password', user.password || '');
+      if (image && image !== user.avatar) {
+        formData.append('img', {
+          uri: image,
+          name: `avatar_${user._id}.jpg`,
+          type: 'image/jpeg',
+        });
+      }
 
-    setUser(updatedUser);
-    Alert.alert('Thành công', 'Thông tin hồ sơ đã được cập nhật.');
+      const response = await AxiosInstance().put(`/users/update/${user._id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      console.log('Cập nhật thành công:', response);
+
+      // Lưu user mới vào useAuth, giữ lại avatar từ state nếu API không trả về
+      const updatedUser = {
+        ...response.user,
+        avatar: image || user.avatar || null, // Giữ avatar hiện tại
+      };
+      setUser(updatedUser);
+      Alert.alert('Thành công', 'Thông tin hồ sơ đã được cập nhật.');
+    } catch (err) {
+      console.error('Lỗi khi cập nhật:', err.message);
+      Alert.alert('Lỗi', 'Không thể cập nhật thông tin. Vui lòng thử lại.');
+    }
   };
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>👤 Hồ sơ cá nhân</Text>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#2c2c2c" />
+        </TouchableOpacity>
+        <Text style={styles.title}>Hồ sơ cá nhân</Text>
+        <View style={styles.placeholder} />
+      </View>
 
-      <TouchableOpacity onPress={pickImage} style={styles.imagePicker}>
-        {image ? (
-          <Image source={{ uri: image }} style={styles.avatar} />
-        ) : (
-          <View style={styles.avatarPlaceholder}>
-            <Ionicons name="camera" size={32} color="#888" />
-          </View>
-        )}
+      <View style={styles.imagePicker}>
+        <TouchableOpacity onPress={pickImage}>
+          {image ? (
+            <Image source={{ uri: image }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Ionicons name="camera" size={32} color="#666" />
+            </View>
+          )}
+        </TouchableOpacity>
         <Text style={styles.uploadText}>Tải ảnh lên</Text>
-      </TouchableOpacity>
-
-      <View style={styles.inputGroup}>
-        <FontAwesome5 name="user" size={18} color="#555" style={styles.icon} />
-        <TextInput
-          style={styles.input}
-          value={name}
-          onChangeText={setName}
-          placeholder="Tên đầy đủ"
-        />
       </View>
 
-      <View style={styles.inputGroup}>
-        <MaterialIcons name="email" size={18} color="#555" style={styles.icon} />
-        <TextInput
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Email"
-          keyboardType="email-address"
-        />
-      </View>
+      <View style={styles.inputCard}>
+        <View style={styles.inputGroup}>
+          <FontAwesome5 name="user" size={18} color="#666" style={styles.icon} />
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            placeholder="Tên đầy đủ"
+            placeholderTextColor="#666"
+          />
+        </View>
 
-      <View style={styles.inputGroup}>
-        <Ionicons name="call" size={18} color="#555" style={styles.icon} />
-        <TextInput
-          style={styles.input}
-          value={phone}
-          onChangeText={setPhone}
-          placeholder="Số điện thoại"
-          keyboardType="phone-pad"
-        />
-      </View>
+        <View style={styles.inputGroup}>
+          <MaterialIcons name="email" size={18} color="#666" style={styles.icon} />
+          <TextInput
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Email"
+            keyboardType="email-address"
+            placeholderTextColor="#666"
+          />
+        </View>
 
-      <View style={styles.inputGroup}>
-        <Ionicons name="location" size={18} color="#555" style={styles.icon} />
-        <TextInput
-          style={styles.input}
-          value={address}
-          onChangeText={setAddress}
-          placeholder="Địa chỉ"
-        />
+        <View style={styles.inputGroup}>
+          <Ionicons name="call" size={18} color="#666" style={styles.icon} />
+          <TextInput
+            style={styles.input}
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="Số điện thoại"
+            keyboardType="phone-pad"
+            placeholderTextColor="#666"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Ionicons name="location" size={18} color="#666" style={styles.icon} />
+          <TextInput
+            style={styles.input}
+            value={address}
+            onChangeText={setAddress}
+            placeholder="Địa chỉ"
+            placeholderTextColor="#666"
+          />
+        </View>
       </View>
 
       <View style={styles.infoBox}>
-        <Text style={styles.infoText}>📌 Vai trò: {user?.role || 'N/A'}</Text>
+        <Text style={styles.infoText}>Vai trò: {user?.role || 'N/A'}</Text>
         <Text style={styles.infoText}>
-          ✅ Trạng thái: {user?.isActive ? 'Đang hoạt động' : 'Không hoạt động'}
+          Trạng thái: {user?.isActive ? 'Đang hoạt động' : 'Không hoạt động'}
         </Text>
         <Text style={styles.infoText}>
-          🕒 Ngày tạo: {new Date(user?.createdAt || '').toLocaleString()}
+          Ngày tạo: {user?.createdAt ? new Date(user.createdAt).toLocaleString() : 'N/A'}
         </Text>
         <Text style={styles.infoText}>
-          🔁 Cập nhật: {new Date(user?.updatedAt || '').toLocaleString()}
+          Cập nhật: {user?.updatedAt ? new Date(user.updatedAt).toLocaleString() : 'N/A'}
         </Text>
       </View>
 
       <TouchableOpacity style={styles.button} onPress={handleSave}>
-        <Text style={styles.buttonText}>💾 Lưu thông tin</Text>
+        <Text style={styles.buttonText}>Lưu thông tin</Text>
       </TouchableOpacity>
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#f4f6f8' },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, color: '#333' },
-  imagePicker: { alignItems: 'center', marginBottom: 20 },
-  avatar: { width: 120, height: 120, borderRadius: 60, marginBottom: 10 },
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: '#f0f2f5',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  backButton: {
+    padding: 5,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#2c2c2c',
+    flex: 1,
+    textAlign: 'center',
+  },
+  placeholder: {
+    width: 24,
+  },
+  imagePicker: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  avatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    marginBottom: 10,
+  },
   avatarPlaceholder: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#e0e0e0',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    backgroundColor: '#f0f2f5',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
   },
-  uploadText: { color: '#007bff', fontWeight: '500' },
-
+  uploadText: {
+    fontSize: 16,
+    color: '#8B5A2B',
+    fontWeight: '600',
+  },
+  inputCard: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 15,
+    elevation: 3,
+    marginBottom: 20,
+  },
   inputGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: '#ddd',
     borderRadius: 10,
     backgroundColor: '#fff',
     paddingHorizontal: 12,
     marginBottom: 15,
   },
-  icon: { marginRight: 8 },
-  input: { flex: 1, fontSize: 16, paddingVertical: 12 },
-
+  icon: {
+    marginRight: 8,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 12,
+    color: '#2c2c2c',
+  },
   infoBox: {
-    padding: 15,
     backgroundColor: '#fff',
-    borderRadius: 10,
-    borderColor: '#eee',
-    borderWidth: 1,
+    borderRadius: 15,
+    padding: 15,
+    elevation: 3,
     marginBottom: 20,
   },
-  infoText: { fontSize: 14, marginBottom: 5, color: '#444' },
-
-  button: {
-    backgroundColor: '#007bff',
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
+  infoText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
   },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  button: {
+    backgroundColor: '#8B5A2B',
+    paddingVertical: 15,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
 
 export default ProfileScreen;
