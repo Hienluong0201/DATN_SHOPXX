@@ -1,194 +1,209 @@
-import { router } from 'expo-router';
 import React from 'react';
 import {
-  ActivityIndicator,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
-  GestureResponderEvent
+  Text,
+  Image,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView
 } from 'react-native';
-import { useProducts } from '../../store/useProducts';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import { Ionicons } from '@expo/vector-icons';
 
-const Cart = () => {
-  const sampleCart = [
-    { CartID: 1, Image: 'https://example.com/brown_jacket.jpg', Name: 'Brown Jacket', Price: '$39.97', Quantity: 1 },
-    { CartID: 2, Image: 'https://example.com/brown_suit.jpg', Name: 'Brown Suit', Price: '$120.00', Quantity: 1 },
-    { CartID: 3, Image: 'https://example.com/brown_jacket_xl.jpg', Name: 'Brown Jacket Size XL', Price: '$39.97', Quantity: 1 },
-  ];
+const darkBrown = '#5D3A00';
 
-  const { cart, loading, error, removeFromCart } = useProducts();
-  const navigateToCheckout = () => router.push('../address');
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#CDA15E" />
-      </View>
-    );
+const cartItems = [
+  {
+    id: 1,
+    name: 'Áo len Chunky Cable',
+    price: 35,
+    size: 'L',
+    image: 'https://example.com/jacket.jpg',
+    quantity: 1,
+    reviews: 1278,
+    rating: 5
+  },
+  {
+    id: 2,
+    name: 'Áo nỉ Totally Feel Good',
+    price: 25,
+    size: 'L',
+    image: 'https://example.com/sweater.jpg',
+    quantity: 1,
+    reviews: 2557,
+    rating: 5
   }
+];
 
-  if (error) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    );
+const wishlistItems = [
+  {
+    id: 3,
+    name: 'Quần short bò kem',
+    price: 23,
+    size: 'XL',
+    image: 'https://example.com/shorts.jpg',
+    reviews: 1278,
+    rating: 5
+  },
+  {
+    id: 4,
+    name: 'Áo thun cổ tròn màu thu',
+    price: 18,
+    size: 'XXL',
+    image: 'https://example.com/tshirt.jpg',
+    reviews: 1278,
+    rating: 5
+  },
+  {
+    id: 5,
+    name: 'Áo khoác caro len',
+    price: 45,
+    size: 'L',
+    image: 'https://example.com/coat.jpg',
+    reviews: 1278,
+    rating: 5
+  },
+  {
+    id: 6,
+    name: 'Thắt lưng da nâu',
+    price: 15,
+    size: 'L',
+    image: 'https://example.com/belt.jpg',
+    reviews: 1278,
+    rating: 5
   }
+];
 
-  const displayCart = cart.length > 0 ? cart : sampleCart;
-
-  const renderRightActions = (progress: any, dragX: any, item: any) => {
-    const handleDelete = (event: GestureResponderEvent) => {
-      removeFromCart(item.CartID);
-    };
-
-    return (
-      <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-        <Text style={styles.deleteText}>Xóa</Text>
-      </TouchableOpacity>
-    );
-  };
+const CartScreen = () => {
+  const total = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const shipping = 3;
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>Giỏ hàng</Text>
-      <View style={styles.separator} />
-      {displayCart.length === 0 ? (
-        <Text style={styles.emptyText}>Giỏ hàng trống</Text>
-      ) : (
-        <>
-          {displayCart.map((item) => (
-            <Swipeable
-              key={item.CartID}
-              renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item)}
-            >
-              <View style={styles.card}>
-                <Image source={{ uri: item.Image }} style={styles.image} />
-                <View style={styles.info}>
-                  <Text style={styles.name}>{item.Name}</Text>
-                  <Text style={styles.price}>{item.Price} x {item.Quantity}</Text>
-                </View>
-                <View style={styles.quantityContainer}>
-                  <TouchableOpacity style={styles.quantityButton}>
-                    <Text style={styles.quantityText}>-</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.quantity}>{item.Quantity}</Text>
-                  <TouchableOpacity style={styles.quantityButton}>
-                    <Text style={styles.quantityText}>+</Text>
-                  </TouchableOpacity>
-                </View>
+      <View style={styles.header}>
+        <Ionicons name="chevron-back" size={24} color={darkBrown} />
+        <Text style={styles.headerTitle}>Giỏ hàng của bạn</Text>
+      </View>
+
+      {/* Danh sách mua hàng */}
+      <Text style={styles.sectionTitle}>Danh sách mua ({cartItems.length})</Text>
+      {cartItems.map((item) => (
+        <View key={item.id} style={styles.card}>
+          <Image source={{ uri: item.image }} style={styles.image} />
+          <View style={styles.info}>
+            <Text style={styles.name}>{item.name}</Text>
+            <Text style={styles.review}>⭐ {item.rating} ({item.reviews} đánh giá)</Text>
+            <Text style={styles.price}>£ {item.price.toFixed(2)}</Text>
+            <Text style={styles.size}>Size: {item.size}</Text>
+
+            <View style={styles.actions}>
+              <View style={styles.quantityBox}>
+                <TouchableOpacity><Text style={styles.quantityButton}>-</Text></TouchableOpacity>
+                <Text style={styles.quantity}>{item.quantity}</Text>
+                <TouchableOpacity><Text style={styles.quantityButton}>+</Text></TouchableOpacity>
               </View>
-            </Swipeable>
-          ))}
-          <View style={styles.summary}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryText}>Mã giảm giá</Text>
-              <Text style={styles.summaryValue}>$0.00</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryText}>Phí dịch vụ</Text>
-              <Text style={styles.summaryValue}>$0.00</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.totalText}>Thành tiền</Text>
-              <Text style={styles.totalValue}>$199.94</Text>
+              <TouchableOpacity style={styles.saveBtn}><Text style={styles.saveText}>Lưu lại</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.removeBtn}><Text style={styles.removeText}>Xóa</Text></TouchableOpacity>
             </View>
           </View>
-          <TouchableOpacity style={styles.checkoutButton} onPress={navigateToCheckout}>
-            <Text style={styles.checkoutButtonText}>Xác nhận thanh toán</Text>
-          </TouchableOpacity>
-        </>
-      )}
+        </View>
+      ))}
+
+      {/* Tóm tắt đơn hàng */}
+      <Text style={styles.sectionTitle}>Tóm tắt đơn hàng</Text>
+      <View style={styles.summary}>
+        <SummaryRow label={`Sản phẩm (${cartItems.length})`} value={`£ ${total.toFixed(2)}`} />
+        <SummaryRow label="Phí vận chuyển" value={`£ ${shipping.toFixed(2)}`} />
+        <SummaryRow label="Tổng cộng" value={`£ ${(total + shipping).toFixed(2)}`} bold />
+      </View>
+
+      {/* Danh sách yêu thích */}
+      <Text style={styles.sectionTitle}>Danh sách yêu thích ({wishlistItems.length})</Text>
+      {wishlistItems.map((item) => (
+        <View key={item.id} style={styles.card}>
+          <Image source={{ uri: item.image }} style={styles.image} />
+          <View style={styles.info}>
+            <Text style={styles.name}>{item.name}</Text>
+            <Text style={styles.review}>⭐ {item.rating} ({item.reviews} đánh giá)</Text>
+            <Text style={styles.price}>£ {item.price.toFixed(2)}</Text>
+            <Text style={styles.size}>Size: {item.size}</Text>
+
+            <View style={styles.actions}>
+              <TouchableOpacity style={styles.addBtn}><Text style={styles.saveText}>Thêm vào giỏ</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.removeBtn}><Text style={styles.removeText}>Xóa</Text></TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      ))}
     </ScrollView>
   );
 };
 
+const SummaryRow = ({ label, value, bold }: any) => (
+  <View style={styles.summaryRow}>
+    <Text style={[styles.summaryLabel, bold && { fontWeight: 'bold' }]}>{label}</Text>
+    <Text style={[styles.summaryValue, bold && { fontWeight: 'bold' }]}>{value}</Text>
+  </View>
+);
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F8F8', padding: 16 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#1C1C1E', marginBottom: 8 },
-  separator: { height: 1, backgroundColor: '#E0E0E0', marginBottom: 12 },
+  container: { flex: 1, backgroundColor: '#F9F6F1', padding: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: darkBrown, marginLeft: 8 },
+
+  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: darkBrown, marginTop: 20, marginBottom: 10 },
+
   card: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    padding: 14,
-    marginBottom: 14,
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
-    alignItems: 'center'
-  },
-  image: { width: 80, height: 80, borderRadius: 14, resizeMode: 'cover' },
-  info: { marginLeft: 14, flex: 1 },
-  name: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2A2A2A',
-    marginBottom: 4,
-    fontFamily: 'serif', // Sang trọng hơn, có thể đổi thành font custom nếu muốn
-  },
-  price: { fontSize: 14, color: '#CDA15E', fontWeight: '600' },
-  quantityContainer: { flexDirection: 'row', alignItems: 'center' },
-  quantityButton: {
-    backgroundColor: '#EFEFEF',
-    width: 28,
-    height: 28,
+    backgroundColor: '#fff',
     borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 6
-  },
-  quantityText: { fontSize: 16, color: '#555', fontWeight: '600' },
-  quantity: { fontSize: 16, color: '#1A1A1A', fontWeight: '600' },
-  summary: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
     shadowColor: '#000',
+    shadowOpacity: 0.05,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
     shadowRadius: 4,
-    elevation: 2,
-    marginBottom: 16
+    elevation: 3
   },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 6 },
-  summaryText: { fontSize: 15, color: '#444' },
-  summaryValue: { fontSize: 15, fontWeight: '600', color: '#444' },
-  totalText: { fontSize: 16, color: '#000', fontWeight: 'bold' },
-  totalValue: { fontSize: 16, color: '#000', fontWeight: 'bold' },
-  checkoutButton: {
-    backgroundColor: '#CDA15E',
-    paddingVertical: 14,
-    borderRadius: 16,
+  image: { width: 80, height: 80, borderRadius: 10 },
+  info: { flex: 1, marginLeft: 12 },
+  name: { fontSize: 15, fontWeight: '600', color: '#333' },
+  review: { fontSize: 13, color: '#888', marginVertical: 2 },
+  price: { fontSize: 16, fontWeight: 'bold', color: darkBrown },
+  size: { fontSize: 13, color: '#555', marginBottom: 6 },
+
+  actions: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
+  quantityBox: {
+    flexDirection: 'row',
     alignItems: 'center',
+    borderColor: '#ccc',
+    borderWidth: 1,
+    borderRadius: 8,
+    marginRight: 10,
+    paddingHorizontal: 6
+  },
+  quantityButton: { fontSize: 16, paddingHorizontal: 6, color: darkBrown },
+  quantity: { fontSize: 14, fontWeight: '600', marginHorizontal: 4 },
+
+  saveBtn: { paddingHorizontal: 10 },
+  removeBtn: { paddingHorizontal: 10 },
+  addBtn: { paddingHorizontal: 10 },
+  saveText: { color: darkBrown, fontSize: 13 },
+  removeText: { color: '#c0392b', fontSize: 13 },
+
+  summary: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
-    marginBottom: 40
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2
   },
-  checkoutButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  emptyText: { fontSize: 16, color: '#888', textAlign: 'center', marginTop: 30 },
-  errorText: { fontSize: 16, color: '#c0392b', textAlign: 'center', marginTop: 20 },
-  deleteButton: {
-    backgroundColor: '#CDA15E',
-    justifyContent: 'center',
-    alignItems: 'center',
-    alignSelf: 'center',
-    width: 70,
-    height: '100%',
-    borderTopRightRadius: 20,
-    borderBottomRightRadius: 20
-  },
-  deleteText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  summaryLabel: { fontSize: 14, color: '#444' },
+  summaryValue: { fontSize: 14, color: darkBrown }
 });
 
-export default Cart;
+export default CartScreen;
