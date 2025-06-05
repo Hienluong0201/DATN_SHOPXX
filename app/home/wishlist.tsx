@@ -13,7 +13,8 @@ import {
 } from 'react-native';
 import { useAuth } from '../../store/useAuth';
 import AxiosInstance from '../../axiosInstance/AxiosInstance';
-import { Ionicons } from '@expo/vector-icons'; // Thêm icon cho nút xóa
+import { Ionicons } from '@expo/vector-icons'; 
+import { useFocusEffect } from 'expo-router';
 
 const Wishlist = () => {
   const { user } = useAuth();
@@ -22,6 +23,11 @@ const Wishlist = () => {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
+   useFocusEffect(
+    React.useCallback(() => {
+      fetchWishlist(); // mỗi lần vào lại tab/trang là fetch lại liền
+    }, [user])
+  );
   // Hàm lấy danh sách yêu thích từ API
   const fetchWishlist = async () => {
     if (!user?._id) {
@@ -72,23 +78,16 @@ const Wishlist = () => {
   };
 
   // Hàm xóa sản phẩm khỏi danh sách yêu thích
-  const removeFromWishlist = async (productId: string) => {
-    if (!user?._id) {
-      Alert.alert('Lỗi', 'Vui lòng đăng nhập để xóa sản phẩm.');
-      return;
-    }
-
-    try {
-      await AxiosInstance().delete('/wishlist', {
-        data: { userID: user._id, productID: productId },
-      });
-      setWishlist(wishlist.filter((item) => item.ProductID !== productId));
-      Alert.alert('Thành công', 'Đã xóa sản phẩm khỏi danh sách yêu thích.');
-    } catch (err) {
-      console.error('Lỗi khi xóa yêu thích:', err);
-      Alert.alert('Lỗi', 'Không thể xóa sản phẩm khỏi danh sách yêu thích.');
-    }
-  };
+  const removeFromWishlist = async (wishlistId: string) => {
+  try {
+    await AxiosInstance().delete(`/wishlist/${wishlistId}`);
+    setWishlist(wishlist.filter((item) => item.WishlistID !== wishlistId));
+    Alert.alert('Thành công', 'Đã xóa sản phẩm khỏi danh sách yêu thích.');
+  } catch (err) {
+    console.error('Lỗi khi xóa yêu thích:', err);
+    Alert.alert('Lỗi', 'Không thể xóa sản phẩm khỏi danh sách yêu thích.');
+  }
+};
 
   // Gọi API khi component mount hoặc user thay đổi
   useEffect(() => {
@@ -107,7 +106,7 @@ const Wishlist = () => {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.container}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#d4af37" />
       </View>
     );
@@ -164,12 +163,13 @@ const Wishlist = () => {
               <Text style={styles.price}>{item.Price.toLocaleString('vi-VN')}đ</Text>
             </View>
             <TouchableOpacity
-              style={styles.removeButton}
-              onPress={() => removeFromWishlist(item.ProductID)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="trash-outline" size={20} color="#fff" />
-            </TouchableOpacity>
+                  style={styles.removeButton}
+                  onPress={() => removeFromWishlist(item.WishlistID)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#fff" />
+                </TouchableOpacity>
+
           </TouchableOpacity>
         ))
       )}
@@ -178,6 +178,12 @@ const Wishlist = () => {
 };
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+  flex: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: '#f5f5f5', // cùng màu với container
+},
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',

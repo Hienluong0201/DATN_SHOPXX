@@ -1,106 +1,125 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  FlatList,
-  Image,
-  RefreshControl,
+  View, Text, StyleSheet, TouchableOpacity,
+  FlatList, Image, ActivityIndicator, RefreshControl, ScrollView
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useProducts } from '../store/useProducts';
 
-// Thành phần ProductCard
 const ProductCard = ({ product, onPress }) => (
   <TouchableOpacity style={styles.productCard} onPress={onPress}>
     <Image
-      source={{ uri: product.Image || 'https://via.placeholder.com/120' }} // Fallback image
+      source={{ uri: product.Image || 'https://via.placeholder.com/120' }}
       style={styles.productImage}
     />
-    <Text style={styles.productName}>{product.Name || 'Unnamed Product'}</Text>
+    <Text style={styles.productName}>{product.Name || 'Sản phẩm không tên'}</Text>
     <View style={styles.ratingContainer}>
       <MaterialIcons name="star" size={16} color="#FFD700" />
-      <Text style={styles.ratingText}>{product.Rating || '4.9'}</Text>
+      <Text style={styles.ratingText}>{product.Rating || '4.0'}</Text>
     </View>
-    <Text style={styles.productPrice}>
-      {(product.Price || 0).toLocaleString()}đ
-    </Text>
+    <Text style={styles.productPrice}>{(product.Price || 0).toLocaleString()}đ</Text>
   </TouchableOpacity>
 );
 
 const Products = () => {
   const { categoryId } = useLocalSearchParams();
-  const { categories, products, getProductsByCategory, fetchProducts, loading, error } = useProducts();
+  const {
+    categories,
+    products,
+    getProductsByCategory,
+    fetchProducts,
+    fetchCategories,
+    loading,
+    error
+  } = useProducts();
 
-  // State để quản lý trạng thái làm mới
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // Memoize categoryList để tránh tạo mới trong mỗi render
-  const categoryList = useMemo(() => {
-    return [{ CategoryID: 'all', Name: 'Tất cả' }, ...(categories || [])];
-  }, [categories]);
+  // Danh sách tất cả category cho thanh tab ngang
+  const categoryList = useMemo(
+    () => [{ CategoryID: 'all', Name: 'Tất cả' }, ...(categories || [])],
+    [categories]
+  );
 
-  // State để theo dõi index của danh mục được chọn
-  const [selectedCategoryIndex, setSelectedCategoryIndex] = useState(() => {
-    if (!categoryId) return 0; // Mặc định là "Tất cả"
-    const initialIndex = categoryList.findIndex((cat) => cat.CategoryID === categoryId);
-    return initialIndex !== -1 ? initialIndex : 0;
-  });
+  // Lấy index category đang chọn dựa vào params truyền từ router
+  const selectedCategoryIndex = useMemo(() => {
+    if (!categoryId) return 0;
+    const idx = categoryList.findIndex((cat) => cat.CategoryID === categoryId);
+    return idx !== -1 ? idx : 0;
+  }, [categoryId, categoryList]);
 
-  // Cập nhật selectedCategoryIndex khi categoryId hoặc categoryList thay đổi
+  // Lấy đúng danh mục theo index
+  const selectedCategory = categoryList[selectedCategoryIndex] || categoryList[0];
+
+  // Danh sách sản phẩm theo danh mục (filter client hoặc lấy hết từ server)
+  const filteredProducts =
+    selectedCategory.CategoryID === 'all'
+      ? products
+      : getProductsByCategory(selectedCategory.CategoryID);
+
+  // Fetch categories 1 lần khi vào trang
   useEffect(() => {
-    const index = categoryId
-      ? categoryList.findIndex((cat) => cat.CategoryID === categoryId)
-      : 0;
-    if (index !== -1 && index !== selectedCategoryIndex) {
-      setSelectedCategoryIndex(index);
-    } else if (index === -1 && selectedCategoryIndex !== 0) {
-      setSelectedCategoryIndex(0);
-    }
-  }, [categoryId, categoryList, selectedCategoryIndex]);
+    fetchCategories();
+  }, []);
 
-  // Hàm xử lý khi kéo để làm mới
+  // Fetch lại sản phẩm mỗi lần đổi categoryId
+  useEffect(() => {
+    fetchProducts({ categoryId: categoryId || 'all', page: 1, limit });
+    setPage(2);
+    setHasMore(true);
+  }, [categoryId]);
+
+  // Kéo xuống để refresh
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      // Reset selectedCategoryIndex về "Tất cả"
-      setSelectedCategoryIndex(0);
-      // Cập nhật categoryId trong URL về "all"
-      router.setParams({ categoryId: 'all' });
-      // Gọi fetchProducts nếu tồn tại, nếu không thì log cảnh báo
-      if (fetchProducts) {
-        await fetchProducts();
-      } else {
-        console.warn('fetchProducts is not defined in useProducts');
-      }
-    } catch (err) {
-      console.error('Error refreshing products:', err);
+      await fetchCategories();
+      await fetchProducts({ categoryId: categoryId || 'all', page: 1, limit });
+      setPage(2);
+      setHasMore(true);
     } finally {
       setRefreshing(false);
     }
   };
 
-  // Lọc sản phẩm dựa trên danh mục được chọn
-  const selectedCategory = categoryList[selectedCategoryIndex] || categoryList[0];
-  const filteredProducts = selectedCategory.CategoryID === 'all'
-    ? products
-    : getProductsByCategory(selectedCategory.CategoryID);
+  // Load thêm sản phẩm (phân trang)
+  const loadMoreProducts = async () => {
+    if (!hasMore || isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const newProducts = await fetchProducts({
+        categoryId: selectedCategory.CategoryID,
+        page,
+        limit,
+      });
+      setHasMore(newProducts.length === limit);
+      setPage(prev => prev + 1);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
-  const navigateToProductDetail = (productId: string) =>
+  // Đi tới trang chi tiết sản phẩm
+  const navigateToProductDetail = (productId) => {
     router.push({ pathname: './productDetail', params: { productId } });
+  };
 
-  if (loading && !refreshing) {
+  // Nếu đang loading lần đầu (page 1)
+  if (loading && !refreshing && page === 1) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#d4af37" />
+      <View style={styles.fullScreenLoadingContainer}>
+        <ActivityIndicator size={50} color="#d4af37" />
+        <Text style={styles.loadingText}>Đang tải...</Text>
       </View>
     );
   }
 
+  // Nếu lỗi
   if (error) {
     return (
       <View style={styles.container}>
@@ -109,75 +128,110 @@ const Products = () => {
     );
   }
 
-  return (
-    <View style={styles.container}>
-      {/* Header với nút back */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back" size={24} color="#000" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Danh Mục</Text>
-      </View>
-
-      {/* Danh mục (category tabs) cố định trên cùng */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoryContainer}
-        contentContainerStyle={styles.categoryContent}
-      >
-        {categoryList.map((cat, index) => (
-          <TouchableOpacity
-            key={cat.CategoryID}
-            style={[
-              styles.categoryCard,
-              index === selectedCategoryIndex && styles.selectedCategory,
-            ]}
-            onPress={() => {
-              setSelectedCategoryIndex(index);
-              router.setParams({ categoryId: cat.CategoryID });
-            }}
-          >
-            <Text style={styles.categoryName}>{cat.Name || 'Không tên'}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* Danh sách sản phẩm với pull-to-refresh */}
-      {filteredProducts.length === 0 ? (
+ return (
+  <View style={styles.container}>
+    {/* FlatList với header sticky */}
+    <FlatList
+      data={filteredProducts}
+      renderItem={({ item }) => (
+        <ProductCard
+          product={item}
+          onPress={() => navigateToProductDetail(item.ProductID)}
+        />
+      )}
+      keyExtractor={(item, index) => item.ProductID || `fallback-${index}`}
+      numColumns={2}
+      columnWrapperStyle={styles.productRow}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={styles.productList}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={['#d4af37']}
+          tintColor="#d4af37"
+        />
+      }
+      onEndReached={loadMoreProducts}
+      onEndReachedThreshold={0.5}
+      ListFooterComponent={
+        isLoadingMore ? (
+          <ActivityIndicator size="small" color="#d4af37" style={styles.loadingMore} />
+        ) : null
+      }
+      ListEmptyComponent={
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>Không có sản phẩm trong danh mục này</Text>
         </View>
-      ) : (
-        <FlatList
-          data={filteredProducts}
-          renderItem={({ item }) => (
-            <ProductCard
-              product={item}
-              onPress={() => navigateToProductDetail(item.ProductID)}
-            />
-          )}
-          keyExtractor={(item) => item.ProductID || Math.random().toString()}
-          numColumns={2}
-          columnWrapperStyle={styles.productRow}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.productList}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={['#d4af37']}
-              tintColor="#d4af37"
-            />
-          }
-        />
-      )}
-    </View>
-  );
+      }
+      ListHeaderComponent={
+        <View>
+          {/* Header với nút back */}
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <MaterialIcons name="arrow-back" size={24} color="#000" />
+            </TouchableOpacity>
+            <Text style={styles.title}>Danh Mục</Text>
+          </View>
+
+          {/* Thanh tab danh mục */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoryContainer}
+            contentContainerStyle={styles.categoryContent}
+          >
+            {categoryList.map((cat, index) => (
+              <TouchableOpacity
+                key={cat.CategoryID}
+                style={[
+                  styles.categoryTab,
+                  index === selectedCategoryIndex && styles.selectedCategoryTab,
+                ]}
+                onPress={() => {
+                  router.setParams({ categoryId: cat.CategoryID });
+                }}
+              >
+                <Text style={styles.categoryName}>{cat.Name || 'Không tên'}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      }
+      stickyHeaderIndices={[0]} // Sticky header (header là phần đầu tiên)
+    />
+  </View>
+);
+
+
 };
 
-// Styles giữ nguyên
 const styles = StyleSheet.create({
+  categoryContainer: {
+  marginTop: 0,
+  marginBottom: 4,
+  backgroundColor: '#fff', // màu nền cố định
+  borderBottomWidth: 1,
+  borderColor: '#f0f0f0',
+  paddingVertical: 4,
+  zIndex: 2,
+},
+categoryContent: {
+  paddingHorizontal: 10,
+  alignItems: 'center',
+},
+  fullScreenLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 18,
+    color: '#2c2c2c',
+    fontWeight: '500',
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff',
@@ -202,19 +256,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   categoryContainer: {
-    position: 'absolute',
-    top: 70,
-    left: 0,
-    right: 0,
-    height: 40,
-    backgroundColor: '#fff',
-    zIndex: 1,
+    marginTop: 5,
+    marginBottom: 6,
   },
   categoryContent: {
     paddingHorizontal: 10,
     alignItems: 'center',
   },
-  categoryCard: {
+  categoryTab: {
     paddingVertical: 8,
     paddingHorizontal: 15,
     marginRight: 10,
@@ -222,7 +271,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
   },
-  selectedCategory: {
+  selectedCategoryTab: {
     backgroundColor: '#d4af37',
   },
   categoryName: {
@@ -248,7 +297,8 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   productList: {
-    paddingTop: 60,
+    paddingTop: 10,
+    paddingBottom: 30,
   },
   productRow: {
     justifyContent: 'space-between',
@@ -289,7 +339,10 @@ const styles = StyleSheet.create({
   productPrice: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#c0392b',
+  },
+  loadingMore: {
+    marginVertical: 20,
   },
 });
 

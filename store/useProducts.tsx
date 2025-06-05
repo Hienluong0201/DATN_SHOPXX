@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect, FC, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, FC, ReactNode,} from 'react';
+import {Alert} from 'react-native';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
 
 interface ProductContextType {
@@ -11,8 +12,16 @@ interface ProductContextType {
   getProductById: (id: string) => any | undefined;
   getProductsByCategory: (categoryId: string) => any[];
   addToCart: (product: any, quantity: number) => void;
-  addToWishlist: (product: any) => void;
-  fetchData: () => Promise<void>;
+
+  // Wishlist mới:
+  fetchWishlist: (userId: string) => Promise<void>;
+  addToWishlist: (product: any, userId: string) => Promise<void>;
+  removeFromWishlist: (wishlistId: string) => Promise<void>;
+  isInWishlist: (productId: string) => boolean;
+  getWishlistId: (productId: string) => string | undefined;
+
+  fetchCategories: () => Promise<void>;
+  fetchProducts: (params: { categoryId: string; page?: number; limit?: number }) => Promise<any[]>;
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
@@ -22,40 +31,136 @@ export const ProductProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<any[]>([]);
   const [cart, setCart] = useState<any[]>([]);
   const [wishlist, setWishlist] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  // Fetch Wishlist từ API
+  const fetchWishlist = async (userId: string) => {
     setLoading(true);
     try {
-      // Lấy danh mục
-      const categoryResponse = await AxiosInstance().get('/category');
-      console.log('categoryResponse:', categoryResponse);
+      const response = await AxiosInstance().get(`/wishlist?userID=${userId}`);
+      const newWishlist = (response || []).map(item => ({
+        WishlistID: item._id,
+        ProductID: item.productID._id,
+        ...item.productID,
+      }));
+      setWishlist(newWishlist);
+      setError(null);
+    } catch (err) {
+      setError('Không thể tải danh sách yêu thích.');
+      setWishlist([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      const fetchedCategories = categoryResponse.map((category) => ({
+  // Thêm vào wishlist
+const addToWishlist = async (product, userId) => {
+  // Nếu đã có rồi thì KHÔNG gọi API, và không thêm vào state nữa!
+  if (wishlist.some(item => item.ProductID === product.ProductID)) return;
+
+  setLoading(true);
+  try {
+    const response = await AxiosInstance().post(`/wishlist`, {
+      userID: userId,
+      productID: product.ProductID,
+    });
+
+    // Nếu API trả về đúng định dạng:
+    // response._id: ID wishlist vừa tạo
+    // response.productID: object sản phẩm hoặc chỉ ID sản phẩm
+    setWishlist(prev => [
+      ...prev,
+      {
+        WishlistID: response._id, // hoặc response.WishlistID nếu backend trả về vậy
+        ProductID: response.productID?._id || response.productID, // phòng trường hợp trả về object hoặc chỉ ID
+        ...(typeof response.productID === 'object' ? response.productID : product),
+      }
+    ]);
+
+    setError(null);
+  } catch (err) {
+    // Kiểm tra lỗi trả về từ server (đã có trong wishlist)
+    const serverMsg = err?.response?.data?.message || err?.message || '';
+    if (serverMsg === 'Sản phẩm đã có trong wishlist.') {
+      // KHÔNG cần báo lỗi, KHÔNG setError, để tránh hiện message đỏ ở UI
+      // Có thể cho Alert nhẹ nhàng nếu thích:
+       Alert.alert('Thông báo', 'Sản phẩm đã có trong danh sách yêu thích!');
+    } else {
+      setError('Không thể thêm vào danh sách yêu thích.');
+      Alert.alert('Lỗi', 'Không thể thêm vào danh sách yêu thích.');
+    }
+    // Optional: log lỗi để debug khi cần
+    // console.error('addToWishlist ERROR:', serverMsg, err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+
+
+  // Xoá khỏi wishlist
+const removeFromWishlist = async (wishlistId) => {
+  setLoading(true);
+  try {
+    await AxiosInstance().delete(`/wishlist/${wishlistId}`);
+    setWishlist(prev => prev.filter(item => item.WishlistID !== wishlistId));
+  } catch (err) {
+    setError('Không thể xoá khỏi danh sách yêu thích.');
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+  // Kiểm tra sản phẩm đã có trong wishlist chưa
+  const isInWishlist = (productId: string) =>
+    wishlist.some(item => item.ProductID === productId);
+
+  // Lấy WishlistID theo ProductID
+  const getWishlistId = (productId: string) =>
+    wishlist.find(item => item.ProductID === productId)?.WishlistID;
+
+  // ...Các hàm fetchCategories, fetchProducts, addToCart như bạn đang có...
+  const fetchCategories = async () => {
+    setLoading(true);
+    try {
+      const categoryResponse = await AxiosInstance().get('/category');
+      setCategories(categoryResponse.map((category) => ({
         CategoryID: category._id,
         Name: category.name,
         Icon: getIconForCategory(category.name),
         Description: category.description || '',
         Status: category.status || true,
-      }));
-      console.log('fetchedCategories:', fetchedCategories);
-      setCategories(fetchedCategories);
+      })));
+      return categoryResponse;
+    } catch (err) {
+      setError('Không thể tải danh mục. Vui lòng thử lại sau.');
+      setCategories([]);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      // Lấy sản phẩm
-      const productResponse = await AxiosInstance().get('/products?limit=100');
-      console.log('productResponse:', productResponse);
+  const fetchProducts = async ({ categoryId, page = 1, limit = 10 }) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const query = categoryId === 'all'
+        ? `/products?page=${page}&limit=${limit}`
+        : `/products?categoryID=${categoryId}&page=${page}&limit=${limit}`;
+      const productResponse = await AxiosInstance().get(query);
 
       const fetchedProducts = await Promise.all(
         (productResponse.products || []).map(async (product) => {
+          if (!product._id) return null;
           let imageURLs = ['https://via.placeholder.com/150'];
           try {
             const imageResponse = await AxiosInstance().get(`/img?productID=${product._id}`);
             imageURLs = imageResponse[0]?.imageURL || imageURLs;
-          } catch (imgError) {
-            console.warn(`Failed to fetch image for product ${product._id}:`, imgError);
-            // Sử dụng hình ảnh mặc định nếu lỗi
-          }
+          } catch { /* ignore image fetch error */ }
           return {
             ProductID: product._id,
             CategoryID: product.categoryID || '',
@@ -67,23 +172,13 @@ export const ProductProvider: FC<{ children: ReactNode }> = ({ children }) => {
           };
         })
       );
-      console.log('fetchedProducts:', fetchedProducts);
-      setProducts(fetchedProducts);
 
-      // TODO: Gọi API để lấy giỏ hàng nếu có
-      // Ví dụ: const cartResponse = await AxiosInstance().get('/cart');
-      // setCart(cartResponse);
-
-      // TODO: Gọi API để lấy wishlist nếu có
-      // Ví dụ: const wishlistResponse = await AxiosInstance().get('/wishlist');
-      // setWishlist(wishlistResponse);
+      const validProducts = fetchedProducts.filter((p) => p !== null);
+      setProducts((prev) => page === 1 ? validProducts : [...prev, ...validProducts]);
+      return validProducts;
     } catch (err) {
-      console.error('Error fetching data:', err);
-      setError('Không thể tải dữ liệu. Vui lòng thử lại sau.');
-      setCategories([]);
-      setProducts([]);
-      setCart([]);
-      setWishlist([]);
+      setError('Không thể tải sản phẩm. Vui lòng thử lại sau.');
+      return [];
     } finally {
       setLoading(false);
     }
@@ -92,19 +187,15 @@ export const ProductProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const getIconForCategory = (name: string) => {
     switch (name) {
       case 'Áo Khoác':
-        return 'jacket-outline';
       case 'Áo Polo':
-        return 'shirt-outline';
       case 'Áo Thun':
-        return 'shirt-outline';
       case 'Áo Sơ Mi':
-        return 'shirt-outline';
+        return 'shirt';
       case 'Quần Dài':
-        return 'man-outline';
       case 'Quần Đùi':
-        return 'man-outline';
+        return 'person';
       default:
-        return 'cube-outline';
+        return 'cube';
     }
   };
 
@@ -114,21 +205,33 @@ export const ProductProvider: FC<{ children: ReactNode }> = ({ children }) => {
     products.filter((p) => p.CategoryID === categoryId);
 
   const addToCart = (product: any, quantity: number) => {
-    setCart((prev) => [
-      ...prev,
-      { ...product, CartID: prev.length + 1, Quantity: quantity },
-    ]);
-  };
-
-  const addToWishlist = (product: any) => {
-    setWishlist((prev) => [
-      ...prev,
-      { ...product, WishlistID: prev.length + 1 },
-    ]);
+    setCart((prev) => {
+      const existingItemIndex = prev.findIndex((item) => item.ProductID === product.ProductID);
+      if (existingItemIndex !== -1) {
+        const updatedCart = [...prev];
+        updatedCart[existingItemIndex] = {
+          ...updatedCart[existingItemIndex],
+          Quantity: updatedCart[existingItemIndex].Quantity + quantity,
+        };
+        return updatedCart;
+      }
+      return [
+        ...prev,
+        { ...product, CartID: `${product.ProductID}-${Date.now()}`, Quantity: quantity },
+      ];
+    });
   };
 
   useEffect(() => {
-    fetchData();
+    const initializeData = async () => {
+      const fetchedCategories = await fetchCategories();
+      if (fetchedCategories.length > 0) {
+        await fetchProducts({ categoryId: fetchedCategories[0].CategoryID, page: 1, limit: 10 });
+      } else {
+        await fetchProducts({ categoryId: 'all', page: 1, limit: 10 });
+      }
+    };
+    initializeData();
   }, []);
 
   return (
@@ -143,8 +246,13 @@ export const ProductProvider: FC<{ children: ReactNode }> = ({ children }) => {
         getProductById,
         getProductsByCategory,
         addToCart,
+        fetchWishlist,
         addToWishlist,
-        fetchData,
+        removeFromWishlist,
+        isInWishlist,
+        getWishlistId,
+        fetchCategories,
+        fetchProducts,
       }}
     >
       {children}
