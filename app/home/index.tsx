@@ -20,6 +20,7 @@ import { useAuth } from '../../store/useAuth';
 import { useProducts } from '../../store/useProducts';
 import AdvancedFilterModal from '../components/AdvancedFilterModal';
 import { useFocusEffect } from 'expo-router';
+import AxiosInstance from '../../axiosInstance/AxiosInstance';
 export default function HomeScreen() {
 
   const { user, loadUser, setUser } = useAuth();
@@ -35,7 +36,7 @@ export default function HomeScreen() {
   const { fetchCategories, fetchWishlist } = useProducts();
   const [page, setPage] = useState(1); 
   const { wishlist, addToWishlist, removeFromWishlist, isInWishlist, getWishlistId } = useProducts(); 
-
+  const { fetchProductVariants } = useProducts(); 
   useFocusEffect(
     useCallback(() => {
       fetchCategories(),
@@ -124,25 +125,42 @@ export default function HomeScreen() {
     }
   };
 
-  const addToCart = async (product: any) => {
-    try {
-      const cart = await AsyncStorage.getItem('cart');
-      let cartItems = cart ? JSON.parse(cart) : [];
-      const existingItem = cartItems.find((item: any) => item.ProductID === product.ProductID);
+ const addToCartServer = async (product: any) => {
+  if (!user?._id) {
+    Alert.alert('Lỗi', 'Vui lòng đăng nhập để thêm vào giỏ hàng!');
+    return;
+  }
 
-      if (existingItem) {
-        existingItem.quantity = (existingItem.quantity || 1) + 1;
-      } else {
-        cartItems.push({ ...product, quantity: 1 });
-      }
+  // Gọi hàm fetchProductVariants lấy variant theo ProductID
+  let variants = [];
+  try {
+    variants = await fetchProductVariants(product.ProductID);
+  } catch (err) {
+    Alert.alert('Lỗi', 'Không thể lấy biến thể sản phẩm!');
+    return;
+  }
 
-      await AsyncStorage.setItem('cart', JSON.stringify(cartItems));
-      Alert.alert('Thành công', `${product.Name} đã được thêm vào giỏ hàng!`);
-    } catch (err) {
-      console.error('Lỗi khi thêm vào giỏ hàng:', err);
-      Alert.alert('Lỗi', 'Không thể thêm sản phẩm vào giỏ hàng.');
-    }
-  };
+  if (!variants || variants.length === 0) {
+    Alert.alert('Lỗi', 'Sản phầm này đã dừng kinh doanh!');
+    return;
+  }
+
+  // Lấy variant đầu tiên hoặc cho user chọn nếu muốn
+  const variantId = variants[0]._id;
+
+  try {
+    await AxiosInstance().post('/cart', {
+      userID: user._id,
+      productVariant: variantId,
+      soluong: 1,
+    });
+    Alert.alert('Thành công', `${product.Name} đã được thêm vào giỏ hàng!`);
+  } catch (err: any) {
+    Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể thêm vào giỏ hàng.');
+    console.log('Cart API error:', err?.response || err);
+  }
+};
+
 
 const handleToggleWishlist = (product) => {
   if (!user?._id) {
@@ -422,7 +440,7 @@ const handleToggleWishlist = (product) => {
                   </View>
                   <TouchableOpacity
                     style={styles.addToCartButton}
-                    onPress={() => addToCart(product)}
+                    onPress={() => addToCartServer(product)}
                   >
                     <Text style={styles.addToCartText}>Thêm vào giỏ</Text>
                   </TouchableOpacity>

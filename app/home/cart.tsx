@@ -1,27 +1,26 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, ActivityIndicator, Image, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
+import { Trash2 } from 'lucide-react-native'; // Sử dụng icon "thùng rác" hiện đại
 import { useAuth } from '../../store/useAuth';
+import { useProducts } from '../../store/useProducts';
 import AxiosInstance from '../../axiosInstance/AxiosInstance';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 
 const Cart = () => {
-  const { user, loadUser } = useAuth();
+  const { user } = useAuth();
+  const { products } = useProducts();
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (user?._id) {
-      fetchCart();
-    } else {
+  const fetchCart = useCallback(async () => {
+    if (!user?._id) {
       setCart([]);
       setLoading(false);
       setError('Bạn cần đăng nhập để xem giỏ hàng!');
+      return;
     }
-  }, [user]);
-
-  const fetchCart = async () => {
     setLoading(true);
     try {
       const response = await AxiosInstance().get(`/cart/${user._id}`);
@@ -33,7 +32,23 @@ const Cart = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?._id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchCart();
+    }, [fetchCart])
+  );
+
+  useEffect(() => {
+    if (user?._id) {
+      fetchCart();
+    } else {
+      setCart([]);
+      setLoading(false);
+      setError('Bạn cần đăng nhập để xem giỏ hàng!');
+    }
+  }, [user?._id, fetchCart]);
 
   const removeFromCart = async (cartId: string) => {
     Alert.alert(
@@ -60,12 +75,12 @@ const Cart = () => {
   const updateQuantity = async (cartId: string, value: number) => {
     const cartItem = cart.find(item => item._id === cartId);
     if (!cartItem) return;
-    if (cartItem.quantity + value < 1) return;
+    if (cartItem.soluong + value < 1) return;
     try {
-      await AxiosInstance().patch(`/cart/${cartId}`, { quantity: cartItem.quantity + value });
+      await AxiosInstance().patch(`/cart/${cartId}`, { soluong: cartItem.soluong + value });
       setCart(prev =>
         prev.map(item =>
-          item._id === cartId ? { ...item, quantity: item.quantity + value } : item
+          item._id === cartId ? { ...item, soluong: item.soluong + value } : item
         )
       );
     } catch (err) {
@@ -74,7 +89,12 @@ const Cart = () => {
   };
 
   const getTotal = () => {
-    return cart.reduce((sum, item) => sum + (item.productID?.price || 0) * (item.quantity || 1), 0);
+    return cart.reduce(
+      (sum, item) =>
+        sum +
+        (item.productVariant?.productID?.price || 0) * (item.soluong || 1),
+      0
+    );
   };
 
   const navigateToCheckout = () => {
@@ -85,16 +105,14 @@ const Cart = () => {
     router.push('../address');
   };
 
-  // Giao diện loading
   if (loading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#d4af37" />
+        <ActivityIndicator size="large" color="#ee4d2d" />
       </View>
     );
   }
 
-  // Giao diện lỗi
   if (error) {
     return (
       <View style={styles.container}>
@@ -104,90 +122,231 @@ const Cart = () => {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.root}>
       <Text style={styles.title}>Giỏ hàng</Text>
       {cart.length === 0 ? (
         <Text style={styles.emptyText}>Giỏ hàng trống</Text>
       ) : (
-        <>
-          {cart.map((item) => (
-            <Swipeable
-              key={item._id}
-              renderRightActions={() => (
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => removeFromCart(item._id)}
-                >
-                  <Text style={styles.deleteText}>Xóa</Text>
-                </TouchableOpacity>
-              )}
-            >
-              <View style={styles.card}>
-                <Image
-                  source={{ uri: item.productID?.imageURL?.[0] || 'https://via.placeholder.com/80' }}
-                  style={styles.image}
-                />
-                <View style={styles.info}>
-                  <Text style={styles.name}>{item.productID?.name || 'Tên sản phẩm'}</Text>
-                  <Text style={styles.price}>
-                    {(item.productID?.price || 0).toLocaleString('vi-VN')}đ x {item.quantity}
-                  </Text>
-                </View>
-                <View style={styles.quantityContainer}>
+        <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 90 }}>
+          {cart.map((item, idx) => {
+            const productId = item.productVariant?.productID?._id;
+            const productInList = products.find(p => p.ProductID === productId);
+            const imgUrl = productInList?.Image || 'https://via.placeholder.com/120';
+
+            return (
+              <Swipeable
+                key={item._id}
+                renderRightActions={() => (
                   <TouchableOpacity
-                    style={styles.quantityButton}
-                    onPress={() => updateQuantity(item._id, -1)}
+                    style={styles.deleteButton}
+                    onPress={() => removeFromCart(item._id)}
                   >
-                    <Text style={styles.quantityText}>-</Text>
+                    <Trash2 color="white" size={22} />
                   </TouchableOpacity>
-                  <Text style={styles.quantity}>{item.quantity}</Text>
-                  <TouchableOpacity
-                    style={styles.quantityButton}
-                    onPress={() => updateQuantity(item._id, 1)}
-                  >
-                    <Text style={styles.quantityText}>+</Text>
-                  </TouchableOpacity>
+                )}
+              >
+                <View style={styles.card}>
+                  <Image
+                    source={{ uri: imgUrl }}
+                    style={styles.image}
+                  />
+                  <View style={styles.info}>
+                    <Text style={styles.name} numberOfLines={2}>
+                      {item.productVariant?.productID?.name || 'Tên sản phẩm'}
+                    </Text>
+                    <Text style={styles.variant}>
+                      Màu: <Text style={styles.bold}>{item.productVariant?.color}</Text> | Size: <Text style={styles.bold}>{item.productVariant?.size}</Text>
+                    </Text>
+                    <View style={styles.rowBetween}>
+                      <Text style={styles.price}>
+                        {(item.productVariant?.productID?.price || 0).toLocaleString('vi-VN')}đ
+                      </Text>
+                      <View style={styles.quantityContainer}>
+                        <TouchableOpacity
+                          style={styles.quantityButton}
+                          onPress={() => updateQuantity(item._id, -1)}
+                        >
+                          <Text style={styles.quantityText}>-</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.quantity}>{item.soluong}</Text>
+                        <TouchableOpacity
+                          style={styles.quantityButton}
+                          onPress={() => updateQuantity(item._id, 1)}
+                        >
+                          <Text style={styles.quantityText}>+</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
                 </View>
-              </View>
-            </Swipeable>
-          ))}
-          <View style={styles.summary}>
+              </Swipeable>
+            );
+          })}
+          <View style={styles.bottomSection}>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryText}>Thành tiền</Text>
+              <Text style={styles.summaryText}>Tổng tiền</Text>
               <Text style={styles.summaryValue}>{getTotal().toLocaleString('vi-VN')}đ</Text>
             </View>
+            <TouchableOpacity style={styles.checkoutButton} onPress={navigateToCheckout}>
+              <Text style={styles.checkoutButtonText}>Thanh toán</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.checkoutButton} onPress={navigateToCheckout}>
-            <Text style={styles.checkoutButtonText}>Xác nhận thanh toán</Text>
-          </TouchableOpacity>
-        </>
+        </ScrollView>
       )}
-    </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 10, backgroundColor: '#f0f2f5' },
-  title: { fontSize: 24, fontWeight: '800', margin: 10, color: '#1a1a1a' },
-  card: { flexDirection: 'row', backgroundColor: '#fff', padding: 10, marginBottom: 10, borderRadius: 15, elevation: 5, alignItems: 'center' },
-  image: { width: 80, height: 80, resizeMode: 'cover', borderRadius: 10 },
-  info: { marginLeft: 10, flex: 1, justifyContent: 'center' },
-  name: { fontSize: 16, fontWeight: '600', color: '#2c2c2c' },
-  price: { fontSize: 14, color: '#c0392b', fontWeight: '700' },
-  quantityContainer: { flexDirection: 'row', alignItems: 'center' },
-  quantityButton: { backgroundColor: '#e0e0e0', padding: 5, borderRadius: 10, marginHorizontal: 5 },
-  quantityText: { fontSize: 16, color: '#333', fontWeight: '600' },
-  quantity: { fontSize: 16, marginHorizontal: 10, color: '#333' },
-  summary: { backgroundColor: '#fff', padding: 10, borderRadius: 15, marginBottom: 10, elevation: 5 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 5 },
-  summaryText: { fontSize: 16, color: '#2c2c2c' },
-  summaryValue: { fontSize: 16, color: '#2c2c2c', fontWeight: '600' },
-  checkoutButton: { backgroundColor: '#d4af37', padding: 12, borderRadius: 12, alignItems: 'center', margin: 10 },
-  checkoutButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  emptyText: { fontSize: 16, color: '#2c2c2c', textAlign: 'center', marginTop: 20 },
+  root: {
+    flex: 1,
+    backgroundColor: '#f7f7f8',
+    paddingTop: 8,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#f7f7f8',
+    paddingHorizontal: 8,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#222',
+    marginLeft: 14,
+    marginBottom: 10,
+    marginTop: 14,
+  },
+  card: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 14,
+    padding: 14,
+    shadowColor: '#222',
+    shadowOpacity: 0.07,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 14,
+    elevation: 3,
+    alignItems: 'center',
+  },
+  image: {
+    width: 90,
+    height: 90,
+    borderRadius: 12,
+    backgroundColor: '#f2f2f2',
+  },
+  info: {
+    flex: 1,
+    marginLeft: 14,
+    justifyContent: 'space-between',
+  },
+  name: {
+    fontSize: 16,
+    color: '#222',
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  variant: {
+    fontSize: 13,
+    color: '#888',
+    marginBottom: 6,
+  },
+  bold: { fontWeight: '700', color: '#111' },
+  price: {
+    fontSize: 16,
+    color: '#ee4d2d',
+    fontWeight: '700',
+    marginBottom: 0,
+  },
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  quantityContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f6f6f6',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  quantityButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quantityText: {
+    fontSize: 22,
+    color: '#222',
+    fontWeight: '600',
+  },
+  quantity: {
+    minWidth: 28,
+    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#222',
+  },
+  deleteButton: {
+    backgroundColor: '#ee4d2d',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 54,
+    height: 90,
+    borderRadius: 12,
+    marginVertical: 6,
+  },
+  bottomSection: {
+    marginTop: 8,
+    marginBottom: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 16,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    elevation: 4,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  summaryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  summaryValue: {
+    fontSize: 18,
+    color: '#ee4d2d',
+    fontWeight: '700',
+  },
+  checkoutButton: {
+    backgroundColor: '#ee4d2d',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 8,
+    shadowColor: '#ee4d2d',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.13,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  checkoutButtonText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#444',
+    textAlign: 'center',
+    marginTop: 50,
+  },
   errorText: { fontSize: 16, color: '#c0392b', textAlign: 'center', marginTop: 20 },
-  deleteButton: { backgroundColor: '#ff4444', justifyContent: 'center', alignItems: 'center', width: 70, height: '100%', borderRadius: 10 },
-  deleteText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });
 
 export default Cart;

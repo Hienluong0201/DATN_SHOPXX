@@ -22,6 +22,7 @@ interface ProductContextType {
 
   fetchCategories: () => Promise<void>;
   fetchProducts: (params: { categoryId: string; page?: number; limit?: number }) => Promise<any[]>;
+  fetchProductVariants: (productId: string) => Promise<any[]>;
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
@@ -97,7 +98,21 @@ const addToWishlist = async (product, userId) => {
   }
 };
 
-
+const fetchProductVariants = async (productId: string) => {
+  setLoading(true);
+  try {
+    const response = await AxiosInstance().get(`/productvariant/byproduct/${productId}`);
+    console.log("Du lieu productdetai", response)
+    // response là mảng các variant
+    setError(null);
+    return response; // Trả về mảng variant
+  } catch (err) {
+    setError('Không thể tải các biến thể sản phẩm.');
+    return [];
+  } finally {
+    setLoading(false);
+  }
+};
 
 
   // Xoá khỏi wishlist
@@ -253,6 +268,7 @@ const removeFromWishlist = async (wishlistId) => {
         getWishlistId,
         fetchCategories,
         fetchProducts,
+        fetchProductVariants,
       }}
     >
       {children}
