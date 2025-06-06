@@ -1,31 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Image } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons'; // Sử dụng cả Ionicons và MaterialIcons
+import { Ionicons } from '@expo/vector-icons';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
+import { useAuth } from '../store/useAuth'; // Import useAuth
 
 const Orders = () => {
+  const { user, loadUser } = useAuth(); // Lấy user từ useAuth
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('Tất cả');
 
   useEffect(() => {
+    // Nếu user chưa có thì load user trước
+    if (!user?._id) {
+      loadUser();
+      return;
+    }
+
     const fetchOrders = async () => {
       setLoading(true);
       try {
-        const sampleOrders = [
-          { OrderID: 1, items: [{ Image: 'https://example.com/brown_jacket.jpg', Name: 'Brown Jacket', Size: 'Size XL', Price: '$39.97', Status: 'Thành công' }] },
-          { OrderID: 2, items: [{ Image: 'https://example.com/brown_suit.jpg', Name: 'Brown Suit', Size: 'Size XL', Price: '$120.00', Status: 'Thành công' }] },
-          { OrderID: 3, items: [{ Image: 'https://example.com/brown_jacket_xl.jpg', Name: 'Brown Jacket', Size: 'Size XL', Price: '$39.97', Status: 'Đang chờ' }] },
-          { OrderID: 4, items: [{ Image: 'https://example.com/brown_jacket.jpg', Name: 'Brown Jacket', Size: 'Size XL', Price: '$39.97', Status: 'Thành công' }] },
-          { OrderID: 5, items: [{ Image: 'https://example.com/brown_suit.jpg', Name: 'Brown Suit', Size: 'Size XL', Price: '$120.00', Status: 'Thành công' }] },
-          { OrderID: 6, items: [{ Image: 'https://example.com/brown_jacket_xl.jpg', Name: 'Brown Jacket', Size: 'Size XL', Price: '$39.97', Status: 'Đã hủy' }] },
-          { OrderID: 7, items: [{ Image: 'https://example.com/brown_jacket.jpg', Name: 'Brown Jacket', Size: 'Size XL', Price: '$39.97', Status: 'Thành công' }] },
-        ];
-        setOrders(sampleOrders);
+        // Gọi API lấy order theo user
+        const response = await AxiosInstance().get(`/order/user/${user._id}`);
+        setOrders(response); // Nếu response là mảng order
+        setError(null);
       } catch (err) {
-        console.error('Error fetching orders:', err);
         setError('Không thể tải đơn hàng. Vui lòng thử lại sau.');
         setOrders([]);
       } finally {
@@ -33,7 +34,7 @@ const Orders = () => {
       }
     };
     fetchOrders();
-  }, []);
+  }, [user]);
 
   const navigateToOrderDetail = (orderId: string) => {
     router.push({ pathname: './orderDetail', params: { orderId: orderId.toString() } });
@@ -45,7 +46,7 @@ const Orders = () => {
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#d4af37" />
       </View>
     );
@@ -59,10 +60,11 @@ const Orders = () => {
     );
   }
 
+  // Lọc đơn hàng theo tab
   const filteredOrders = orders.filter((order) => {
     if (activeTab === 'Tất cả') return true;
-    if (activeTab === 'Hoàn thành') return order.items.some(item => item.Status === 'Thành công');
-    if (activeTab === 'Đã hủy') return order.items.some(item => item.Status === 'Đã hủy');
+    if (activeTab === 'Hoàn thành') return order.items?.some(item => item.Status === 'Thành công');
+    if (activeTab === 'Đã hủy') return order.items?.some(item => item.Status === 'Đã hủy');
     return false;
   });
 
@@ -86,18 +88,18 @@ const Orders = () => {
           </TouchableOpacity>
         ))}
       </View>
-      {filteredOrders.length === 0 ? (
+{filteredOrders.length === 0 ? (
         <Text style={styles.emptyText}>Bạn chưa có đơn hàng nào</Text>
       ) : (
         filteredOrders.map((order) => (
           <TouchableOpacity
-            key={order.OrderID}
+            key={order._id || order.OrderID}
             style={styles.orderCard}
-            onPress={() => navigateToOrderDetail(order.OrderID.toString())}
+            onPress={() => navigateToOrderDetail((order._id || order.OrderID).toString())}
           >
-            {order.items.map((item, index) => (
+            {order.items?.map((item, index) => (
               <View key={index} style={styles.orderItem}>
-                <Image source={{ uri: item.Image }} style={styles.itemImage} />
+                <Image source={{ uri: item.Image || 'https://via.placeholder.com/80' }} style={styles.itemImage} />
                 <View style={styles.itemDetails}>
                   <Text style={styles.itemName}>{item.Name}</Text>
                   <Text style={styles.itemSize}>{item.Size}</Text>
@@ -123,6 +125,7 @@ const Orders = () => {
 };
 
 const styles = StyleSheet.create({
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
   container: { flex: 1, padding: 20, backgroundColor: '#f0f2f5' },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
   backButton: { padding: 5 },
