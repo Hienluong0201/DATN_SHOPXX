@@ -1,183 +1,203 @@
-import React, { useState, useEffect } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons'; // Thêm icon cho nút Back
+import React, { useState, useEffect, useRef } from 'react';
+import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform, Alert, SafeAreaView } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-const Reviews = () => {
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState('');
-  const [reviews, setReviews] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+import AxiosInstance from '../axiosInstance/AxiosInstance';
+import { useAuth } from '../store/useAuth';
 
-  useEffect(() => {
-    const fetchReviews = async () => {
-      setLoading(true);
-      try {
-        // Dữ liệu mẫu để khớp với hình ảnh
-        const sampleReviews = [
-          {
-            ReviewID: 1,
-            Image: 'https://example.com/brown_jacket.jpg',
-            Name: 'Brown Jacket',
-            Price: '$39.97',
-            Rating: 4,
-            Comment: 'Sản phẩm đẹp, giao hàng nhanh.',
-            CommentDate: '01/06/2025',
-          },
-        ];
-        setReviews(sampleReviews);
-      } catch (err) {
-        console.error('Error fetching reviews:', err);
-        setError('Không thể tải đánh giá. Vui lòng thử lại sau.');
-        setReviews([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchReviews();
-  }, []);
+const ChatWithShop = () => {
+  const { user } = useAuth();
+  const userID = user?._id || '682e481011a6a754eef1302f';
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const flatListRef = useRef(null);
 
-  const handleSubmit = () => {
-    // TODO: Gọi API để gửi đánh giá
-    console.log({ rating, comment });
+  // Fetch messages function (giữ nguyên)
+  const fetchMessages = async () => {
+    if (!userID) return;
+    setLoading(true);
+    try {
+      const response = await AxiosInstance().get(`/messages/between?userID=${userID}`);
+      const data = Array.isArray(response) ? response : [];
+      setMessages(
+        data.map((msg) => ({
+          id: msg._id,
+          sender: msg.sender,
+          text: msg.text,
+          timestamp: new Date(msg.timestamp).toLocaleString('vi-VN', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+        }))
+      );
+      setError(null);
+    } catch (err) {
+      console.error('Lỗi lấy tin nhắn:', err.message);
+      setError('Không thể tải tin nhắn. Vui lòng thử lại sau.');
+      setMessages([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // Send message function (giữ nguyên)
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !userID) return;
+    const payload = { userID, sender: 'user', text: newMessage };
+    setLoading(true);
+    try {
+      const response = await AxiosInstance().post('/messages', payload);
+      await fetchMessages();
+      setNewMessage('');
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    } catch (err) {
+      console.error('Lỗi gửi tin nhắn:', err.message);
+      setError('Không gửi được tin nhắn. Vui lòng thử lại.');
+      Alert.alert('Lỗi', 'Không gửi được tin nhắn. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // === POLLING, đặt ở đây ===
+  useEffect(() => {
+    if (!userID) return;
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 2000); // 2 giây gọi lại 1 lần
+    return () => clearInterval(interval);
+  }, [userID]);
+  // ===========================
+
   const goBack = () => {
-    // TODO: Quay lại màn hình trước
     router.back();
   };
 
-  const renderStars = () => {
-    const stars = [];
-    for (let i = 1; i <= 5; i++) {
-      stars.push(
-        <Ionicons
-          key={i}
-          name={i <= rating ? 'star' : 'star-outline'}
-          size={24}
-          color="#FFD700"
-          onPress={() => setRating(i)}
-        />
-      );
-    }
-    return stars;
-  };
+  const renderMessage = ({ item }) => (
+    <View style={[styles.messageContainer, item.sender === 'user' ? styles.userMessage : styles.shopMessage]}>
+      <Text style={styles.messageText}>{item.text}</Text>
+      <Text style={styles.messageTimestamp}>{item.timestamp}</Text>
+    </View>
+  );
 
-  if (loading) {
+  if (!userID) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#d4af37" />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <Text style={styles.errorText}>Bạn chưa đăng nhập!</Text>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={goBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#2c2c2c" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Đánh giá</Text>
-        <View style={styles.placeholder} />
-      </View>
-      {reviews.length > 0 && reviews.map((review) => (
-        <View key={review.ReviewID} style={styles.productCard}>
-          <Image source={{ uri: review.Image }} style={styles.productImage} />
-          <View style={styles.productInfo}>
-            <Text style={styles.productName}>{review.Name}</Text>
-            <Text style={styles.productPrice}>{review.Price} | 1 sản phẩm</Text>
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.keyboardContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={goBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#2c2c2c" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Chat với Shop</Text>
+          <View style={styles.placeholder} />
+        </View>
+
+        {loading && !messages.length ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#27ae60" />
           </View>
-          <TouchableOpacity style={styles.editButton}>
-            <Text style={styles.editText}>bắt đầu đánh giá</Text>
+        ) : error ? (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            renderItem={renderMessage}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.messageList}
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          />
+        )}
+
+        <View style={[styles.inputContainer, ]}>
+          <TextInput
+            style={styles.input}
+            placeholder="Nhập tin nhắn..."
+            value={newMessage}
+            onChangeText={setNewMessage}
+            multiline
+          />
+          <TouchableOpacity style={styles.sendButton} onPress={handleSendMessage} disabled={loading}>
+            <Ionicons name="send" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
-      ))}
-      <Text style={styles.question}>Đơn hàng này hài lòng?</Text>
-      <View style={styles.starContainer}>{renderStars()}</View>
-      <Text style={styles.commentLabel}>Thêm nhận xét của bạn</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Nhập nhận xét"
-        value={comment}
-        onChangeText={setComment}
-        multiline
-      />
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.cancelButton} onPress={goBack}>
-          <Text style={styles.cancelText}>Thoát</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-          <Text style={styles.submitText}>Gửi</Text>
-        </TouchableOpacity>
-      </View>
-      {reviews.length > 0 && (
-        <View style={styles.reviewSection}>
-          <Text style={styles.reviewSectionTitle}>Đánh giá từ Insightlancer</Text>
-          {reviews.map((review) => (
-            <View key={review.ReviewID} style={styles.reviewCard}>
-              <View style={styles.reviewHeader}>
-                <Text style={styles.reviewRating}>{review.Rating}/5</Text>
-                <View style={styles.reviewStars}>
-                  {Array.from({ length: 5 }, (_, i) => (
-                    <Ionicons
-                      key={i}
-                      name={i < review.Rating ? 'star' : 'star-outline'}
-                      size={16}
-                      color="#FFD700"
-                    />
-                  ))}
-                </View>
-              </View>
-              <Text style={styles.reviewComment}>{review.Comment}</Text>
-              <Text style={styles.reviewDate}>{review.CommentDate}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-    </ScrollView>
+      </KeyboardAvoidingView>
+      <View style={{height: 100}} />
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#f0f2f5' },
-  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  container: { flex: 1, backgroundColor: '#f5f6fa' },
+  keyboardContainer: { flex: 1 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    backgroundColor: '#fff',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
   backButton: { padding: 5 },
-  title: { fontSize: 24, fontWeight: '700', color: '#1a1a1a', flex: 1, textAlign: 'center' },
+  title: { fontSize: 20, fontWeight: '700', color: '#1a1a1a', flex: 1, textAlign: 'center' },
   placeholder: { width: 24 },
-  productCard: { flexDirection: 'row', backgroundColor: '#fff', padding: 15, borderRadius: 15, marginBottom: 15, alignItems: 'center', elevation: 3 },
-  productImage: { width: 60, height: 60, resizeMode: 'cover', borderRadius: 10 },
-  productInfo: { flex: 1, marginLeft: 15 },
-  productName: { fontSize: 16, fontWeight: '600', color: '#2c2c2c' },
-  productPrice: { fontSize: 14, color: '#666', marginTop: 5 },
-  editButton: { backgroundColor: '#f0f2f5', padding: 5, borderRadius: 10 },
-  editText: { fontSize: 12, color: '#8B5A2B', fontWeight: '600' },
-  question: { fontSize: 18, fontWeight: '600', color: '#1a1a1a', marginBottom: 10 },
-  starContainer: { flexDirection: 'row', marginBottom: 15 },
-  commentLabel: { fontSize: 16, fontWeight: '600', color: '#2c2c2c', marginBottom: 5 },
-  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 12, padding: 12, marginBottom: 15, minHeight: 100, textAlignVertical: 'top' },
-  buttonContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
-  cancelButton: { backgroundColor: '#f0f2f5', padding: 12, borderRadius: 12, flex: 1, marginRight: 10, alignItems: 'center' },
-  submitButton: { backgroundColor: '#8B5A2B', padding: 12, borderRadius: 12, flex: 1, alignItems: 'center' },
-  cancelText: { color: '#2c2c2c', fontSize: 16, fontWeight: '600' },
-  submitText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  reviewSection: { marginTop: 20 },
-  reviewSectionTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a', marginBottom: 10 },
-  reviewCard: { backgroundColor: '#fff', padding: 15, borderRadius: 15, marginBottom: 10, elevation: 3 },
-  reviewHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
-  reviewRating: { fontSize: 16, fontWeight: '600', color: '#2c2c2c', marginRight: 10 },
-  reviewStars: { flexDirection: 'row' },
-  reviewComment: { fontSize: 14, color: '#666', marginTop: 5 },
-  reviewDate: { fontSize: 12, color: '#999', marginTop: 5 },
-  emptyText: { fontSize: 16, color: '#666', textAlign: 'center', marginTop: 20 },
-  errorText: { fontSize: 16, color: '#c0392b', textAlign: 'center', marginTop: 20 },
+  messageList: { padding: 15, flexGrow: 1 },
+  messageContainer: { maxWidth: '80%', marginVertical: 5, padding: 12, borderRadius: 15 },
+  userMessage: { alignSelf: 'flex-end', backgroundColor: '#ecf0f1', borderRadius: 10 },
+  shopMessage: { alignSelf: 'flex-start', backgroundColor: '#8B4513', borderRadius: 10 },
+  messageText: { fontSize: 16, color: '#2c2c2c' },
+  messageTimestamp: { fontSize: 12, color: '#999', marginTop: 5, textAlign: 'right' },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  
+  input: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 20,
+    padding: 10,
+    marginRight: 10,
+    maxHeight: 100,
+    backgroundColor: '#fafafa',
+  },
+  sendButton: {
+    backgroundColor: '#8B4513',
+    borderRadius: 20,
+    padding: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: { fontSize: 16, color: '#e74c3c', textAlign: 'center', marginTop: 20 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 });
 
-export default Reviews;
+export default ChatWithShop;

@@ -5,7 +5,6 @@ import { useProducts } from '../store/useProducts';
 import { useAuth } from '../store/useAuth';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
 import { Ionicons } from '@expo/vector-icons';  
-import Toast from 'react-native-toast-message'; 
 
 
 // Hàm gọi API thêm vào giỏ hàng
@@ -31,7 +30,7 @@ const sendReviewAPI = async ({ userID, productID, rating, comment }) => {
       productID,
       rating,
       comment,
-      status: 'pending', // Review mới mặc định trạng thái pending
+      status: 'true', // Review mới mặc định trạng thái pending
     });
     return res.data;
   } catch (error) {
