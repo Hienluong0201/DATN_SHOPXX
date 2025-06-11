@@ -363,7 +363,7 @@ const handleToggleWishlist = (product) => {
               <Ionicons name="cart" size={28} color="#FF8500" />
               <Text style={styles.quickAccessLabel}>Giỏ hàng</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickAccessItem} onPress={() => router.push('/favorites')}>
+            <TouchableOpacity style={styles.quickAccessItem} onPress={() => router.push('/home/wishlist')}>
               <Ionicons name="heart" size={28} color="#FF5161" />
               <Text style={styles.quickAccessLabel}>Yêu thích</Text>
             </TouchableOpacity>

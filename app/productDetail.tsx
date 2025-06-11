@@ -1,19 +1,15 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, TextInput, Alert } from 'react-native';
 import { useLocalSearchParams, useFocusEffect, router } from 'expo-router';
 import { useProducts } from '../store/useProducts';
 import { useAuth } from '../store/useAuth';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
+import { Ionicons } from '@expo/vector-icons';  
+import Toast from 'react-native-toast-message'; 
 
-// Chuẩn hóa giá
-const formatPrice = (price: string | number | undefined | null) => {
-  if (price == null) return '0';
-  const numPrice = typeof price === 'string' ? parseFloat(price.replace(/[^0-9.-]+/g, '')) : price;
-  return isNaN(numPrice) ? '0' : numPrice.toLocaleString('vi-VN');
-};
 
 // Hàm gọi API thêm vào giỏ hàng
-const addToCartAPI = async (userID: string, productVariant: string, soluong: number) => {
+const addToCartAPI = async (userID, productVariant, soluong) => {
   try {
     const res = await AxiosInstance().post('/cart', {
       userID,
@@ -21,8 +17,25 @@ const addToCartAPI = async (userID: string, productVariant: string, soluong: num
       soluong,
     });
     return res.data;
-  } catch (error: any) {
+  } catch (error) {
     const errorMsg = error?.response?.data?.message || error.message || 'Lỗi khi thêm vào giỏ hàng';
+    throw new Error(errorMsg);
+  }
+};
+
+// Hàm gọi API gửi review
+const sendReviewAPI = async ({ userID, productID, rating, comment }) => {
+  try {
+    const res = await AxiosInstance().post('/review', {
+      userID,
+      productID,
+      rating,
+      comment,
+      status: 'pending', // Review mới mặc định trạng thái pending
+    });
+    return res.data;
+  } catch (error) {
+    const errorMsg = error?.response?.data?.message || error.message || 'Lỗi khi gửi đánh giá';
     throw new Error(errorMsg);
   }
 };
@@ -30,21 +43,36 @@ const addToCartAPI = async (userID: string, productVariant: string, soluong: num
 const ProductDetail = () => {
   const { productId } = useLocalSearchParams();
   const { getProductById, addToCart, fetchProductVariants, loading, error } = useProducts();
-  const [product, setProduct] = useState<any | null>(null);
-  const [variants, setVariants] = useState<any[]>([]);
-  const [selectedVariant, setSelectedVariant] = useState<any | null>(null);
-  const [quantity, setQuantity] = useState<number>(1);
-  const [isDataLoaded, setIsDataLoaded] = useState<boolean>(false);
+  const [product, setProduct] = useState(null);
+  const [variants, setVariants] = useState([]);
+  const [selectedVariant, setSelectedVariant] = useState(null);
+  const [quantity, setQuantity] = useState(1);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
   const { user } = useAuth();
+  const [reviews, setReviews] = useState([]);
+  const [reviewTab, setReviewTab] = useState(0);
 
-  // Tải dữ liệu sản phẩm và biến thể
+  // Review form state
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewRating, setReviewRating] = useState(5);
+  const [sendingReview, setSendingReview] = useState(false);
+
+  // Lấy dữ liệu sản phẩm, biến thể, review
   const loadData = useCallback(async () => {
     if (!productId || typeof productId !== 'string' || isDataLoaded) return;
-
     setIsDataLoaded(false);
     try {
       const fetchedProduct = getProductById(productId);
       const fetchedVariants = await fetchProductVariants(productId);
+
+      // Gọi API lấy review
+      let reviewData = [];
+      try {
+        reviewData = await AxiosInstance().get(`/review/product/${productId}`);
+        setReviews(reviewData || []);
+      } catch (err) {
+        setReviews([]);
+      }
 
       setProduct(fetchedProduct || null);
       setVariants(fetchedVariants || []);
@@ -55,61 +83,100 @@ const ProductDetail = () => {
     }
   }, [productId, getProductById, fetchProductVariants, isDataLoaded]);
 
-  // Chỉ gọi loadData một lần khi màn hình focus
+  // Reload lại data sau khi gửi review thành công
+  const reloadReview = async () => {
+    try {
+      const reviewData = await AxiosInstance().get(`/review/product/${productId}`);
+      setReviews(reviewData || []);
+    } catch {}
+  };
+
   useFocusEffect(
     useCallback(() => {
       loadData();
     }, [loadData])
   );
 
-  // Xử lý thay đổi số lượng
-  const handleQuantityChange = useCallback((action: 'increase' | 'decrease') => {
-    if (action === 'increase' && selectedVariant?.stock > quantity) {
-      setQuantity((prev) => prev + 1);
-    } else if (action === 'decrease' && quantity > 1) {
-      setQuantity((prev) => prev - 1);
-    }
-  }, [quantity, selectedVariant?.stock]);
+  // Tính số lượng review theo từng sao
+  const countByStar = (star) => reviews.filter((r) => r.rating === star).length;
+  const totalReview = reviews.length;
+  const reviewTabs = [
+    { label: `Tất cả (${totalReview})`, value: 0 },
+    { label: `5 Sao (${countByStar(5)})`, value: 5 },
+    { label: `4 Sao (${countByStar(4)})`, value: 4 },
+    { label: `3 Sao (${countByStar(3)})`, value: 3 },
+    { label: `2 Sao (${countByStar(2)})`, value: 2 },
+    { label: `1 Sao (${countByStar(1)})`, value: 1 },
+  ];
+  const filteredReviews =
+    reviewTab === 0 ? reviews : reviews.filter((r) => r.rating === reviewTab);
 
-  // Xử lý thêm vào giỏ hàng (server-side)
+  // Xử lý thêm vào giỏ hàng
   const handleAddToCart = useCallback(async () => {
     if (!user || !user._id) {
-      alert('Bạn cần đăng nhập để thêm vào giỏ hàng!');
+      Alert.alert('Thông báo', 'Bạn cần đăng nhập để mua ngay!');
       return;
     }
     if (product && selectedVariant) {
       try {
         await addToCartAPI(user._id, selectedVariant._id, quantity);
-        alert('Đã thêm vào giỏ hàng!');
-        // addToCart(cartItem, quantity); // Nếu muốn đồng bộ local UI, giữ lại dòng này
-      } catch (error: any) {
+       Alert.alert('Thông báo', 'Đã thên sản phẩm vào giỏ hàng Wao wao');
+      } catch (error) {
         alert(error?.message || 'Có lỗi xảy ra khi thêm vào giỏ hàng.');
       }
     } else {
-      alert('Vui lòng chọn biến thể trước khi thêm vào giỏ hàng.');
+     Alert.alert('Thông báo', 'Vui lòng chọn màu và size');
     }
   }, [product, selectedVariant, quantity, user]);
 
-  // Xử lý mua ngay (giữ nguyên hoặc có thể gọi API phía trên, rồi push checkout)
-  const handleBuyNow = useCallback(() => {
-    if (product && selectedVariant) {
-      const cartItem = {
-        ...product,
-        variant: {
-          variantId: selectedVariant._id,
-          size: selectedVariant.size,
-          color: selectedVariant.color,
-          stock: selectedVariant.stock,
-        },
-      };
-      addToCart(cartItem, quantity);
-      router.push('./checkout');
-    } else {
-      alert('Vui lòng chọn biến thể trước khi mua.');
+  // Mua ngay
+const handleBuyNow = useCallback(async () => {
+  if (!user || !user._id) {
+    Alert.alert('Thông báo', 'Bạn cần đăng nhập để mua ngay!');
+    return;
+  }
+  if (product && selectedVariant) {
+    try {
+      await addToCartAPI(user._id, selectedVariant._id, quantity);
+      // Chuyển qua trang giỏ hàng ngay sau khi thêm xong
+      router.push('/home/cart');
+    } catch (error) {
+      alert(error?.message || 'Có lỗi xảy ra khi thêm vào giỏ hàng.');
     }
-  }, [product, selectedVariant, quantity, addToCart]);
+  } else {
+    alert('Vui lòng chọn biến thể trước khi mua.');
+  }
+}, [product, selectedVariant, quantity, user]);
 
-  // Hiển thị loading
+  // Gửi review
+  const handleSendReview = async () => {
+    if (!user || !user._id) {
+      Alert.alert('Bạn cần đăng nhập để đánh giá!');
+      return;
+    }
+    if (!reviewComment.trim()) {
+      Alert.alert('Vui lòng nhập nội dung đánh giá!');
+      return;
+    }
+    setSendingReview(true);
+    try {
+      await sendReviewAPI({
+        userID: user._id,
+        productID: productId,
+        rating: reviewRating,
+        comment: reviewComment.trim(),
+      });
+      Alert.alert('Thành công', 'Đánh giá đã gửi thành công <3 <3');
+      setReviewComment('');
+      setReviewRating(5);
+      reloadReview();
+    } catch (err) {
+      Alert.alert('Lỗi', err?.message || 'Không gửi được đánh giá');
+    }
+    setSendingReview(false);
+  };
+
+  // UI
   if (!isDataLoaded || loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -119,7 +186,6 @@ const ProductDetail = () => {
     );
   }
 
-  // Hiển thị lỗi hoặc không tìm thấy sản phẩm
   if (error || !product) {
     return (
       <View style={styles.loadingContainer}>
@@ -128,7 +194,6 @@ const ProductDetail = () => {
     );
   }
 
-  // Kiểm tra nếu không có biến thể
   if (variants.length === 0) {
     return (
       <View style={styles.container}>
@@ -136,7 +201,7 @@ const ProductDetail = () => {
           <Image source={{ uri: product.Image }} style={styles.image} />
           <View style={styles.details}>
             <Text style={styles.name}>{product.Name}</Text>
-            <Text style={styles.price}>{formatPrice(product.Price)} VNĐ</Text>
+            <Text style={styles.price}>{product.Price} VNĐ</Text>
             <Text style={styles.description}>{product.Description || 'Không có mô tả'}</Text>
             <Text style={styles.discontinuedText}>Sản phẩm đã ngừng kinh doanh</Text>
           </View>
@@ -147,30 +212,40 @@ const ProductDetail = () => {
 
   // Nhóm biến thể theo màu sắc
   const colors = Array.from(new Set(variants.map((v) => v.color)));
-  const sizesByColor = (color: string) => variants.filter((v) => v.color === color).map((v) => v.size);
+  const sizesByColor = (color) =>
+    variants.filter((v) => v.color === color).map((v) => v.size);
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 70 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 70 }}>
         {/* Ảnh sản phẩm */}
         <Image source={{ uri: product.Image }} style={styles.image} />
-
         <View style={styles.details}>
-          {/* Tên sản phẩm */}
           <Text style={styles.name}>{product.Name}</Text>
-
-          {/* Giá và đánh giá */}
-          <View style={styles.priceContainer}>
-            <Text style={styles.price}>{formatPrice(product.Price)} VNĐ</Text>
+         <View style={styles.priceContainer}>
+            <Text style={styles.price}>{product.Price} VNĐ</Text>
             <View style={styles.ratingContainer}>
-              <Text style={styles.ratingText}>{product.Rating || '4.0'} (100 đánh giá)</Text>
+              {[1, 2, 3, 4, 5].map(i => (
+                <Ionicons
+                  key={i}
+                  name={
+                    product.Rating >= i
+                      ? 'star'
+                      : product.Rating >= i - 0.5
+                      ? 'star-half'
+                      : 'star-outline'
+                  }
+                  size={16}
+                  color="#FFD700"
+                  style={{ marginRight: 1 }}
+                />
+              ))}
+              <Text style={styles.ratingText}>
+                {` ${product.Rating ? product.Rating.toFixed(1) : '0.0'} (${totalReview} đánh giá)`}
+              </Text>
             </View>
-          </View>
-
-          {/* Mô tả ngắn */}
+         </View>
           <Text style={styles.description}>{product.Description || 'Không có mô tả'}</Text>
-
-          {/* Chọn màu sắc */}
           <Text style={styles.section}>Màu sắc</Text>
           <View style={styles.variantRow}>
             {colors.map((color) => (
@@ -178,7 +253,9 @@ const ProductDetail = () => {
                 key={color}
                 style={[
                   styles.variantButton,
-                  selectedVariant?.color === color ? styles.selectedVariantButton : null,
+                  selectedVariant?.color === color
+                    ? styles.selectedVariantButton
+                    : null,
                 ]}
                 onPress={() => {
                   const variant = variants.find((v) => v.color === color);
@@ -189,39 +266,42 @@ const ProductDetail = () => {
               </TouchableOpacity>
             ))}
           </View>
-
-          {/* Chọn kích thước */}
-          {selectedVariant && sizesByColor(selectedVariant.color).length > 0 && (
-            <>
-              <Text style={styles.section}>Kích thước</Text>
-              <View style={styles.variantRow}>
-                {sizesByColor(selectedVariant.color).map((size) => (
-                  <TouchableOpacity
-                    key={size}
-                    style={[
-                      styles.variantButton,
-                      selectedVariant?.size === size ? styles.selectedVariantButton : null,
-                    ]}
-                    onPress={() => {
-                      const variant = variants.find((v) => v.color === selectedVariant.color && v.size === size);
-                      setSelectedVariant(variant);
-                    }}
-                  >
-                    <Text style={styles.variantButtonText}>{size}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </>
-          )}
-
-          {/* Số lượng */}
+          {selectedVariant &&
+            sizesByColor(selectedVariant.color).length > 0 && (
+              <>
+                <Text style={styles.section}>Kích thước</Text>
+                <View style={styles.variantRow}>
+                  {sizesByColor(selectedVariant.color).map((size) => (
+                    <TouchableOpacity
+                      key={size}
+                      style={[
+                        styles.variantButton,
+                        selectedVariant?.size === size
+                          ? styles.selectedVariantButton
+                          : null,
+                      ]}
+                      onPress={() => {
+                        const variant = variants.find(
+                          (v) =>
+                            v.color === selectedVariant.color &&
+                            v.size === size
+                        );
+                        setSelectedVariant(variant);
+                      }}
+                    >
+                      <Text style={styles.variantButtonText}>{size}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
           {selectedVariant && (
             <>
               <Text style={styles.section}>Số lượng</Text>
               <View style={styles.quantityContainer}>
                 <TouchableOpacity
                   style={styles.quantityButton}
-                  onPress={() => handleQuantityChange('decrease')}
+                  onPress={() => setQuantity((prev) => Math.max(1, prev - 1))}
                   disabled={quantity <= 1}
                 >
                   <Text style={styles.quantityButtonText}>-</Text>
@@ -237,7 +317,11 @@ const ProductDetail = () => {
                 />
                 <TouchableOpacity
                   style={styles.quantityButton}
-                  onPress={() => handleQuantityChange('increase')}
+                  onPress={() =>
+                    setQuantity((prev) =>
+                      prev < (selectedVariant?.stock || 1) ? prev + 1 : prev
+                    )
+                  }
                   disabled={quantity >= (selectedVariant?.stock || 1)}
                 >
                   <Text style={styles.quantityButtonText}>+</Text>
@@ -246,10 +330,94 @@ const ProductDetail = () => {
               </View>
             </>
           )}
+
+          {/* Form gửi review */}
+          <Text style={[styles.section, { marginTop: 25 }]}>Viết đánh giá của bạn</Text>
+          <View style={styles.reviewInputContainer}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+              <Text style={{ fontSize: 14, marginRight: 8 }}>Đánh giá:</Text>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <TouchableOpacity key={star} onPress={() => setReviewRating(star)}>
+                  <Ionicons
+                    name={star <= reviewRating ? 'star' : 'star-outline'}
+                    size={22}
+                    color="#FFD700"
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TextInput
+              placeholder="Nhập đánh giá của bạn..."
+              style={styles.reviewInput}
+              value={reviewComment}
+              onChangeText={setReviewComment}
+              multiline
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendReviewBtn,
+                (sendingReview || !reviewComment.trim()) && { opacity: 0.6 },
+              ]}
+              onPress={handleSendReview}
+              disabled={sendingReview || !reviewComment.trim()}
+            >
+              <Text style={styles.sendReviewText}>{sendingReview ? 'Đang gửi...' : 'Gửi đánh giá'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Tabs + List review */}
+          <Text style={[styles.section, { marginTop: 28 }]}>Đánh giá sản phẩm</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+            {reviewTabs.map((tab) => (
+              <TouchableOpacity
+                key={tab.value}
+                style={[
+                  styles.reviewTabButton,
+                  reviewTab === tab.value && styles.activeReviewTab,
+                ]}
+                onPress={() => setReviewTab(tab.value)}
+              >
+                <Text
+                  style={[
+                    styles.reviewTabText,
+                    reviewTab === tab.value && { color: '#ee4d2d', fontWeight: 'bold' },
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          {filteredReviews.length === 0 ? (
+            <Text style={{ color: '#666', fontStyle: 'italic' }}>Chưa có đánh giá nào cho sản phẩm này.</Text>
+          ) : (
+            filteredReviews.map((rv) => (
+              <View key={rv._id} style={styles.reviewCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="person-circle" size={28} color="#bbb" />
+                  <Text style={{ marginLeft: 5, fontWeight: '600', color: '#333' }}>
+                    {rv.userID?.name || 'Người dùng'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 2 }}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Ionicons
+                      key={star}
+                      name={star <= rv.rating ? 'star' : 'star-outline'}
+                      size={15}
+                      color="#FFD700"
+                    />
+                  ))}
+                  <Text style={{ fontSize: 12, color: '#888', marginLeft: 10 }}>
+                    {new Date(rv.reviewDate || rv.createdAt).toLocaleDateString()}
+                  </Text>
+                </View>
+                <Text style={{ color: '#222', marginTop: 2 }}>{rv.comment}</Text>
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
-
-      {/* Thanh hành động cố định dưới cùng */}
       {variants.length > 0 && (
         <View style={styles.actionContainer}>
           <TouchableOpacity style={styles.addToCartButton} onPress={handleAddToCart}>
@@ -344,6 +512,61 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: 16, color: '#666', textAlign: 'center', marginTop: 10 },
   errorText: { fontSize: 16, color: '#ee4d2d', textAlign: 'center', marginTop: 20 },
   discontinuedText: { fontSize: 16, color: '#ee4d2d', textAlign: 'center', marginTop: 20, fontWeight: '600' },
+
+  // Review styles
+  reviewInputContainer: {
+    backgroundColor: '#faf8f7',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    marginTop: 5,
+    borderWidth: 1,
+    borderColor: '#f3d5ca',
+  },
+  reviewInput: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 10,
+    minHeight: 45,
+    fontSize: 15,
+    marginBottom: 8,
+  },
+  sendReviewBtn: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#ee4d2d',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 4,
+  },
+  sendReviewText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  reviewTabButton: {
+    borderWidth: 1,
+    borderColor: '#eee',
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    marginRight: 8,
+    backgroundColor: '#fff',
+  },
+  activeReviewTab: {
+    borderColor: '#ee4d2d',
+    backgroundColor: '#ffe6e1',
+  },
+  reviewTabText: {
+    fontSize: 14,
+    color: '#444',
+  },
+  reviewCard: {
+    borderWidth: 1,
+    borderColor: '#eee',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    backgroundColor: '#fafafa',
+  },
 });
 
 export default ProductDetail;

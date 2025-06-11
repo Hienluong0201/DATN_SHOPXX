@@ -103,6 +103,7 @@ const fetchProductVariants = async (productId: string) => {
   try {
     const response = await AxiosInstance().get(`/productvariant/byproduct/${productId}`);
     console.log("Du lieu productdetai", response)
+    console.log(`Variants for product ${productId}:`, response);
     // response là mảng các variant
     setError(null);
     return response; // Trả về mảng variant
