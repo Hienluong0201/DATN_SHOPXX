@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, ActivityIndicator, Image, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
-import { Trash2 } from 'lucide-react-native'; // Sử dụng icon "thùng rác" hiện đại
+import { Trash2 } from 'lucide-react-native';
 import { useAuth } from '../../store/useAuth';
 import { useProducts } from '../../store/useProducts';
 import AxiosInstance from '../../axiosInstance/AxiosInstance';
@@ -12,7 +12,8 @@ const Cart = () => {
   const { products } = useProducts();
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
+  const [selectedItems, setSelectedItems] = useState([]);
 
   const fetchCart = useCallback(async () => {
     if (!user?._id) {
@@ -26,6 +27,7 @@ const Cart = () => {
       const response = await AxiosInstance().get(`/cart/${user._id}`);
       setCart(response || []);
       setError(null);
+      setSelectedItems(new Array(response.length).fill(false));
     } catch (err) {
       setError('Không thể tải giỏ hàng. Vui lòng thử lại.');
       setCart([]);
@@ -50,7 +52,7 @@ const Cart = () => {
     }
   }, [user?._id, fetchCart]);
 
-  const removeFromCart = async (cartId: string) => {
+  const removeFromCart = async (cartId) => {
     Alert.alert(
       "Xác nhận",
       "Bạn muốn xóa sản phẩm này khỏi giỏ hàng?",
@@ -63,6 +65,7 @@ const Cart = () => {
             try {
               await AxiosInstance().delete(`/cart/${cartId}`);
               setCart(prev => prev.filter(item => item._id !== cartId));
+              setSelectedItems(prev => prev.filter((_, i) => cart[i]?._id !== cartId));
             } catch (err) {
               Alert.alert('Lỗi', 'Không thể xóa sản phẩm khỏi giỏ hàng.');
             }
@@ -72,37 +75,72 @@ const Cart = () => {
     );
   };
 
-  const updateQuantity = async (cartId: string, value: number) => {
+  const updateQuantity = async (cartId, value) => {
     const cartItem = cart.find(item => item._id === cartId);
     if (!cartItem) return;
-    if (cartItem.soluong + value < 1) return;
+    if (value === -1 && cartItem.soluong <= 1) return;
     try {
-      await AxiosInstance().patch(`/cart/${cartId}`, { soluong: cartItem.soluong + value });
+      const endpoint = value === -1 ? `/cart/${cartId}/decrease` : `/cart/${cartId}/increase`;
+      await AxiosInstance().patch(endpoint);
       setCart(prev =>
         prev.map(item =>
           item._id === cartId ? { ...item, soluong: item.soluong + value } : item
         )
       );
     } catch (err) {
-      Alert.alert('Lỗi', 'Không thể cập nhật số lượng.');
+      Alert.alert('Lỗi', 'Số lượng vượt quá tồn kho.');
     }
+  };
+
+  const navigateToProductDetail = (productId) => {
+    if (productId) {
+      router.push({
+        pathname: '/productDetail',
+        params: { productId },
+      });
+    }
+  };
+
+  const toggleSelectItem = (index) => {
+    setSelectedItems(prev => {
+      const newSelected = [...prev];
+      newSelected[index] = !newSelected[index];
+      return newSelected;
+    });
   };
 
   const getTotal = () => {
     return cart.reduce(
-      (sum, item) =>
-        sum +
-        (item.productVariant?.productID?.price || 0) * (item.soluong || 1),
+      (sum, item, index) =>
+        selectedItems[index]
+          ? sum + (item.productVariant?.productID?.price || 0) * (item.soluong || 1)
+          : sum,
       0
     );
   };
 
   const navigateToCheckout = () => {
-    if (cart.length === 0) {
-      Alert.alert('Thông báo', 'Giỏ hàng trống!');
+    if (cart.length === 0 || !selectedItems.some(item => item)) {
+      Alert.alert('Thông báo', 'Vui lòng chọn ít nhất một sản phẩm để thanh toán!');
       return;
     }
-    router.push('../address');
+    const selectedProducts = cart
+      .filter((_, index) => selectedItems[index])
+      .map(item => ({
+        cartId: item._id,
+        productId: item.productVariant?.productID?._id,
+        name: item.productVariant?.productID?.name,
+        color: item.productVariant?.color,
+        size: item.productVariant?.size,
+        price: item.productVariant?.productID?.price,
+        quantity: item.soluong,
+        image: products.find(p => p.ProductID === item.productVariant?.productID?._id)?.Image || 'https://via.placeholder.com/120',
+      }));
+
+    router.push({
+      pathname: '../address',
+      params: { selectedProducts: JSON.stringify(selectedProducts) },
+    });
   };
 
   if (loading) {
@@ -146,14 +184,22 @@ const Cart = () => {
                 )}
               >
                 <View style={styles.card}>
+                  <TouchableOpacity
+                    style={[styles.checkbox, selectedItems[idx] ? styles.checkboxSelected : null]}
+                    onPress={() => toggleSelectItem(idx)}
+                  >
+                    {selectedItems[idx] && <Text style={styles.checkboxText}>✓</Text>}
+                  </TouchableOpacity>
                   <Image
                     source={{ uri: imgUrl }}
                     style={styles.image}
                   />
                   <View style={styles.info}>
-                    <Text style={styles.name} numberOfLines={2}>
-                      {item.productVariant?.productID?.name || 'Tên sản phẩm'}
-                    </Text>
+                    <TouchableOpacity onPress={() => navigateToProductDetail(productId)}>
+                      <Text style={styles.name} numberOfLines={2}>
+                        {item.productVariant?.productID?.name || 'Tên sản phẩm'}
+                      </Text>
+                    </TouchableOpacity>
                     <Text style={styles.variant}>
                       Màu: <Text style={styles.bold}>{item.productVariant?.color}</Text> | Size: <Text style={styles.bold}>{item.productVariant?.size}</Text>
                     </Text>
@@ -229,6 +275,25 @@ const styles = StyleSheet.create({
     elevation: 3,
     alignItems: 'center',
   },
+  checkbox: {
+    marginRight: 10,
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#888',
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxSelected: {
+    backgroundColor: '#ee4d2d',
+    borderColor: '#ee4d2d',
+  },
+  checkboxText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   image: {
     width: 90,
     height: 90,
@@ -253,7 +318,7 @@ const styles = StyleSheet.create({
   },
   bold: { fontWeight: '700', color: '#111' },
   price: {
-    fontSize: 16,
+    fontSize: 16 ,
     color: '#ee4d2d',
     fontWeight: '700',
     marginBottom: 0,

@@ -136,14 +136,7 @@ const AddressScreen = () => {
     router.back();
   };
 
-  const handleApply = () => {
-    if (selectedAddress) {
-      const selected = addresses.find((addr) => addr._id === selectedAddress);
-      router.push('/checkout', { selectedAddress: selected });
-    } else {
-      Alert.alert('Lỗi', 'Vui lòng chọn một địa chỉ trước khi áp dụng.');
-    }
-  };
+ 
 
   const handleSelectAddress = (addressId) => {
     setSelectedAddress(addressId);
@@ -200,9 +193,6 @@ const AddressScreen = () => {
       <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
             <Text style={styles.addText}>+ Thêm địa chỉ mới</Text>
           </TouchableOpacity>
-      <TouchableOpacity style={styles.applyButton} onPress={handleApply}>
-        <Text style={styles.applyText}>Áp dụng</Text>
-      </TouchableOpacity>
 
       {/* Modal để thêm hoặc chỉnh sửa địa chỉ */}
       <Modal

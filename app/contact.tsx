@@ -1,10 +1,9 @@
 import { StyleSheet, Text, View, Image } from 'react-native'
 import React from 'react'
 
-const Payment = () => {
+const HelpScreen = () => {
   return (
     <View style={styles.container}>
-     
       <Text style={styles.title}>Tính năng đang phát triển</Text>
       <Text style={styles.description}>
         Chúng tôi đang nỗ lực hoàn thiện tính năng này. Vui lòng quay lại sau!
@@ -13,7 +12,7 @@ const Payment = () => {
   )
 }
 
-export default Payment
+export default HelpScreen
 
 const styles = StyleSheet.create({
   container: {
