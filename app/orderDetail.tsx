@@ -1,35 +1,99 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons'; // Thêm icon cho nút Back
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import AxiosInstance from '../axiosInstance/AxiosInstance';
+import { useProducts } from '../store/useProducts'; // Import context
+
 const OrderDetail = () => {
   const { orderId } = useLocalSearchParams();
+  const { getProductById } = useProducts(); // Lấy getProductById từ context
+  const [orderDetails, setOrderDetails] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Dữ liệu mẫu để khớp với hình ảnh
-  const sampleOrderDetails = [
-    {
-      OrderDetailID: 1,
-      OrderID: orderId || 1,
-      Image: 'https://example.com/brown_suit.jpg',
-      Name: 'Brown Suit',
-      Price: '$120.00',
-      Quantity: 1,
-      PaymentMethod: 'CARD',
-      OrderDate: '25/05/2025',
-      OrderCode: 'TRK452162442',
-      Timeline: [
-        { status: 'Đơn hàng đã đặt', date: '23/05/2025', time: '04:25 PM', icon: 'cart' },
-        { status: 'Đang liên hệ', date: '23/05/2025', time: '04:25 PM', icon: 'call' },
-        { status: 'Đã xuất vận chuyển', date: '23/05/2025', time: '04:25 PM', icon: 'cube' },
-        { status: 'Giao hàng thành công', date: '23/05/2025', time: '04:25 PM', icon: 'checkmark-circle' },
-      ],
-    },
-  ];
+  useEffect(() => {
+    const fetchOrderDetails = async () => {
+      setLoading(true);
+      try {
+        const response = await AxiosInstance().get(`/orderdetail/order/${orderId}`);
+        if (Array.isArray(response)) {
+          // Kiểm tra _id hợp lệ
+          const validOrderDetails = response.filter(detail => detail._id);
+          if (validOrderDetails.length !== response.length) {
+            console.warn('Some order details are missing _id:', response);
+          }
+          // Lấy Name và Image từ ProductContext
+          const enrichedDetails = validOrderDetails.map(detail => {
+            const product = getProductById(detail.variantID.productID) || {};
+            return {
+              ...detail,
+              Name: product.Name || 'Sản phẩm không xác định',
+              Image: product.Image || 'https://via.placeholder.com/80',
+            };
+          });
+          setOrderDetails(enrichedDetails);
+          setError(null);
+        } else {
+          throw new Error('Dữ liệu chi tiết đơn hàng không hợp lệ');
+        }
+      } catch (err) {
+        const errorMessage = err.response?.data?.message || 'Không thể tải chi tiết đơn hàng. Vui lòng thử lại sau.';
+        setError(errorMessage);
+        setOrderDetails([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (orderId) {
+      fetchOrderDetails();
+    } else {
+      setError('Không tìm thấy mã đơn hàng');
+      setLoading(false);
+    }
+  }, [orderId, getProductById]);
 
   const goBack = () => {
     router.back();
   };
+
+  // Hàm định dạng ngày
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  // Hàm định dạng giá tiền
+  const formatPrice = (price) => {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2c2c2c" />
+        <Text style={styles.loadingText}>Đang tải chi tiết đơn hàng...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={() => fetchOrderDetails()}>
+          <Text style={styles.retryButtonText}>Thử lại</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
@@ -40,44 +104,38 @@ const OrderDetail = () => {
         <Text style={styles.title}>Chi tiết đơn hàng</Text>
         <View style={styles.placeholder} />
       </View>
-      {sampleOrderDetails.map((detail) => (
-        <View key={detail.OrderDetailID}>
-          <View style={styles.productCard}>
-            <Image source={{ uri: detail.Image }} style={styles.productImage} />
-            <View style={styles.productInfo}>
-              <Text style={styles.productName}>{detail.Name}</Text>
-              <Text style={styles.productPrice}>{detail.Price}</Text>
-            </View>
-          </View>
+      {orderDetails.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="cart-outline" size={80} color="#ccc" />
+          <Text style={styles.emptyText}>Không có chi tiết đơn hàng</Text>
+        </View>
+      ) : (
+        <View>
+          {/* Hiển thị ngày đặt và mã đơn hàng một lần */}
           <View style={styles.infoCard}>
             <Text style={styles.infoLabel}>Ngày đặt hàng</Text>
-            <Text style={styles.infoValue}>{detail.OrderDate}</Text>
+            <Text style={styles.infoValue}>{formatDate(orderDetails[0].createdAt)}</Text>
             <Text style={styles.infoLabel}>Mã đơn hàng</Text>
-            <Text style={styles.infoValue}>{detail.OrderCode}</Text>
+            <Text style={styles.infoValue}>{orderDetails[0].orderID}</Text>
           </View>
-          <Text style={styles.sectionTitle}>Trạng thái đơn hàng</Text>
-          <View style={styles.timelineContainer}>
-            {detail.Timeline.map((step, index) => (
-              <View key={index} style={styles.timelineItem}>
-                <View style={styles.timelineIcon}>
-                  <Ionicons
-                    name={step.icon}
-                    size={20}
-                    color={index === detail.Timeline.length - 1 ? '#28A745' : '#666'}
-                  />
-                  {index < detail.Timeline.length - 1 && (
-                    <View style={styles.timelineLine} />
-                  )}
-                </View>
-                <View style={styles.timelineDetails}>
-                  <Text style={styles.timelineStatus}>{step.status}</Text>
-                  <Text style={styles.timelineDate}>{step.date}, {step.time}</Text>
-                </View>
+          {/* Danh sách sản phẩm */}
+          {orderDetails.map((detail) => (
+            <View key={detail._id} style={styles.productCard}>
+              <Image
+                source={{ uri: detail.Image }}
+                style={styles.productImage}
+              />
+              <View style={styles.productInfo}>
+                <Text style={styles.productName}>{detail.Name}</Text>
+                <Text style={styles.productPrice}>{formatPrice(detail.price)}</Text>
+                <Text style={styles.productDetail}>Kích thước: {detail.variantID.size}</Text>
+                <Text style={styles.productDetail}>Màu sắc: {detail.variantID.color}</Text>
+                <Text style={styles.productDetail}>Số lượng: {detail.quantity}</Text>
               </View>
-            ))}
-          </View>
+            </View>
+          ))}
         </View>
-      ))}
+      )}
     </ScrollView>
   );
 };
@@ -93,17 +151,18 @@ const styles = StyleSheet.create({
   productInfo: { marginLeft: 15, flex: 1 },
   productName: { fontSize: 16, fontWeight: '600', color: '#2c2c2c' },
   productPrice: { fontSize: 14, color: '#c0392b', fontWeight: '700', marginTop: 5 },
+  productDetail: { fontSize: 14, color: '#666', marginTop: 5 },
   infoCard: { backgroundColor: '#fff', padding: 15, borderRadius: 15, marginBottom: 15, elevation: 3 },
   infoLabel: { fontSize: 16, fontWeight: '600', color: '#2c2c2c' },
   infoValue: { fontSize: 16, color: '#666', marginBottom: 10 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a', marginVertical: 10 },
-  timelineContainer: { backgroundColor: '#fff', padding: 15, borderRadius: 15, elevation: 3 },
-  timelineItem: { flexDirection: 'row', marginBottom: 15 },
-  timelineIcon: { alignItems: 'center', marginRight: 15 },
-  timelineLine: { width: 2, height: 30, backgroundColor: '#e0e0e0', position: 'absolute', top: 30, zIndex: -1 },
-  timelineDetails: { flex: 1 },
-  timelineStatus: { fontSize: 16, fontWeight: '600', color: '#2c2c2c' },
-  timelineDate: { fontSize: 14, color: '#666', marginTop: 5 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f2f5' },
+  loadingText: { marginTop: 10, fontSize: 16, color: '#666' },
+  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f2f5' },
+  errorText: { fontSize: 16, color: '#D32F2F', textAlign: 'center', marginBottom: 20 },
+  retryButton: { backgroundColor: '#2c2c2c', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 15 },
+  retryButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  emptyContainer: { alignItems: 'center', marginTop: 40 },
+  emptyText: { fontSize: 16, color: '#666', textAlign: 'center', marginTop: 12 },
 });
 
 export default OrderDetail;
