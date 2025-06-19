@@ -5,6 +5,15 @@ import { Ionicons } from '@expo/vector-icons';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
 import { useAuth } from '../store/useAuth';
 
+const TAB_OPTIONS = [
+  'Tất cả',
+  'Chờ xử lý',
+  'Đã thanh toán',
+  'Đang giao',
+  'Đã giao',
+  'Đã hủy'
+];
+
 const Orders = () => {
   const { user, loadUser } = useAuth();
   const [orders, setOrders] = useState([]);
@@ -23,6 +32,7 @@ const Orders = () => {
       try {
         const response = await AxiosInstance().get(`/order/user/${user._id}`);
         setOrders(response || []);
+        console.log(response)
         setError(null);
       } catch (err) {
         setError('Không thể tải đơn hàng. Vui lòng thử lại sau.');
@@ -45,8 +55,11 @@ const Orders = () => {
   // Lọc đơn hàng theo tab
   const filteredOrders = orders.filter((order) => {
     if (activeTab === 'Tất cả') return true;
-    if (activeTab === 'Hoàn thành') return order.orderStatus === 'Paid';
-    if (activeTab === 'Đã hủy') return order.orderStatus === 'Cancelled';
+    if (activeTab === 'Chờ xử lý') return order.orderStatus === 'pending';
+    if (activeTab === 'Đã thanh toán') return order.orderStatus === 'paid';
+    if (activeTab === 'Đang giao') return order.orderStatus === 'shipped';
+    if (activeTab === 'Đã giao') return order.orderStatus === 'delivered';
+    if (activeTab === 'Đã hủy') return order.orderStatus === 'cancelled';
     return false;
   });
 
@@ -65,6 +78,24 @@ const Orders = () => {
   // Rút gọn mã đơn hàng
   const shortenOrderId = (id) => {
     return id.slice(0, 8) + '...';
+  };
+
+  // Badge và màu cho từng trạng thái
+  const getStatusProps = (status) => {
+    switch (status) {
+      case 'pending':
+        return { label: 'Chờ xử lý', color: '#FBC02D', bg: '#FFFDE7', icon: 'time-outline' };
+      case 'paid':
+        return { label: 'Đã thanh toán', color: '#28A745', bg: '#E8F5E9', icon: 'cash-outline' };
+      case 'shipped':
+        return { label: 'Đang giao', color: '#039BE5', bg: '#E3F2FD', icon: 'car-outline' };
+      case 'delivered':
+        return { label: 'Đã giao', color: '#8B5A2B', bg: '#EFEBE9', icon: 'checkmark-done' };
+      case 'cancelled':
+        return { label: 'Đã hủy', color: '#D32F2F', bg: '#FFEBEE', icon: 'close-circle' };
+      default:
+        return { label: status, color: '#888', bg: '#eee', icon: 'help-circle' };
+    }
   };
 
   if (loading) {
@@ -96,82 +127,93 @@ const Orders = () => {
         <Text style={styles.title}>Đơn Hàng Của Bạn</Text>
         <View style={styles.placeholder} />
       </View>
-      <View style={styles.tabContainer}>
-        {['Tất cả', 'Hoàn thành', 'Đã hủy'].map((tab) => (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingVertical: 4, marginBottom: 12 }}
+      >
+        {TAB_OPTIONS.map((tab) => (
           <TouchableOpacity
             key={tab}
-            style={[styles.tab, activeTab === tab && styles.activeTab]}
+            style={[
+              styles.tab,
+              activeTab === tab && styles.activeTab,
+              { minWidth: 110, marginRight: 8 }
+            ]}
             onPress={() => setActiveTab(tab)}
           >
             <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
       {filteredOrders.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="cart-outline" size={80} color="#ccc" />
           <Text style={styles.emptyText}>Bạn chưa có đơn hàng nào</Text>
         </View>
       ) : (
-        filteredOrders.map((order) => (
-          <TouchableOpacity
-            key={order._id}
-            style={styles.orderCard}
-            onPress={() => navigateToOrderDetail(order._id)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.orderHeader}>
-              <Text style={styles.orderId}>Mã: #{shortenOrderId(order._id)}</Text>
-              <View style={[
-                styles.statusBadge,
-                order.orderStatus === 'Paid' ? styles.successBadge : styles.cancelledBadge
-              ]}>
-                <Ionicons
-                  name={order.orderStatus === 'Paid' ? 'checkmark-circle' : 'close-circle'}
-                  size={16}
-                  color={order.orderStatus === 'Paid' ? '#28A745' : '#DC3545'}
-                  style={styles.statusIcon}
-                />
-                <Text style={styles.statusText}>
-                  {order.orderStatus === 'Paid' ? 'Hoàn thành' : 'Đã hủy'}
-                </Text>
+        filteredOrders.map((order) => {
+          const statusProps = getStatusProps(order.orderStatus);
+          return (
+            <TouchableOpacity
+              key={order._id}
+              style={styles.orderCard}
+              onPress={() => navigateToOrderDetail(order._id)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.orderHeader}>
+                <Text style={styles.orderId}>Mã: #{shortenOrderId(order._id)}</Text>
+                <View style={[
+                  styles.statusBadge,
+                  { backgroundColor: statusProps.bg }
+                ]}>
+                  <Ionicons
+                    name={statusProps.icon}
+                    size={16}
+                    color={statusProps.color}
+                    style={styles.statusIcon}
+                  />
+                  <Text style={[styles.statusText, { color: statusProps.color }]}>
+                    {statusProps.label}
+                  </Text>
+                </View>
               </View>
-            </View>
-            <View style={styles.orderDetails}>
-              <View style={styles.detailRow}>
-                <Ionicons name="person-outline" size={18} color="#666" />
-                <Text style={styles.detailText}>Người nhận: {order.name}</Text>
+              <View style={styles.orderDetails}>
+                <View style={styles.detailRow}>
+                  <Ionicons name="person-outline" size={18} color="#666" />
+                  <Text style={styles.detailText}>Người nhận: {order.name}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Ionicons name="call-outline" size={18} color="#666" />
+                  <Text style={styles.detailText}>Số điện thoại: {order.sdt}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Ionicons name="location-outline" size={18} color="#666" />
+                  <Text style={styles.detailText}>Địa chỉ: {order.shippingAddress}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Ionicons name="calendar-outline" size={18} color="#666" />
+                  <Text style={styles.detailText}>Ngày đặt: {formatDate(order.orderDate)}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Ionicons
+                    name={order.paymentID?.paymentMethod === 'Credit Card' ? 'card-outline' : 'cash-outline'}
+                    size={18}
+                    color="#666"
+                  />
+                  <Text style={styles.detailText}>
+                    Thanh toán: {order.paymentID?.paymentMethod === 'Credit Card' ? 'Thẻ tín dụng' : 'Tiền mặt'}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.detailRow}>
-                <Ionicons name="call-outline" size={18} color="#666" />
-                <Text style={styles.detailText}>Số điện thoại: {order.sdt}</Text>
+              <View style={styles.footer}>
+                <TouchableOpacity style={styles.detailButton} onPress={() => navigateToOrderDetail(order._id)}>
+                  <Text style={styles.detailButtonText}>Xem chi tiết</Text>
+                </TouchableOpacity>
               </View>
-              <View style={styles.detailRow}>
-                <Ionicons name="location-outline" size={18} color="#666" />
-                <Text style={styles.detailText}>Địa chỉ: {order.shippingAddress}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Ionicons name="calendar-outline" size={18} color="#666" />
-                <Text style={styles.detailText}>Ngày đặt: {formatDate(order.orderDate)}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Ionicons
-                  name={order.paymentID.paymentMethod === 'Credit Card' ? 'card-outline' : 'cash-outline'}
-                  size={18}
-                  color="#666"
-                />
-                <Text style={styles.detailText}>
-                  Thanh toán: {order.paymentID.paymentMethod === 'Credit Card' ? 'Thẻ tín dụng' : 'Tiền mặt'}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.footer}>
-              <TouchableOpacity style={styles.detailButton} onPress={() => navigateToOrderDetail(order._id)}>
-                <Text style={styles.detailButtonText}>Xem chi tiết</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        ))
+            </TouchableOpacity>
+          );
+        })
       )}
     </ScrollView>
   );
@@ -198,24 +240,21 @@ const styles = StyleSheet.create({
   backButton: { padding: 8 },
   title: { fontSize: 22, fontWeight: 'bold', color: '#ffffff', flex: 1, textAlign: 'center' },
   placeholder: { width: 40 },
-  tabContainer: { flexDirection: 'row', marginBottom: 16 },
   tab: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 25,
+    paddingVertical: 9,
+    paddingHorizontal: 18,
+    borderRadius: 20,
     backgroundColor: '#ffffff',
-    marginHorizontal: 4,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    marginBottom: 2,
   },
-  activeTab: { backgroundColor: '#8B5A2B' },
+  activeTab: {
+    backgroundColor: '#8B5A2B',
+    borderColor: '#8B5A2B',
+    borderWidth: 1.5,
+  },
   tabText: { fontSize: 14, color: '#666', fontWeight: '600' },
-  activeTabText: { color: '#ffffff', fontWeight: 'bold' },
+  activeTabText: { color: '#fff', fontWeight: 'bold' },
   orderCard: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
@@ -230,8 +269,6 @@ const styles = StyleSheet.create({
   orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   orderId: { fontSize: 16, fontWeight: 'bold', color: '#333' },
   statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 16 },
-  successBadge: { backgroundColor: '#E8F5E9' },
-  cancelledBadge: { backgroundColor: '#FFEBEE' },
   statusIcon: { marginRight: 4 },
   statusText: { fontSize: 12, fontWeight: '600', color: '#333' },
   orderDetails: { marginBottom: 12 },

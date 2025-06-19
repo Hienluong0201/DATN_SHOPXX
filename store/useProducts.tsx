@@ -23,6 +23,7 @@ interface ProductContextType {
   fetchCategories: () => Promise<void>;
   fetchProducts: (params: { categoryId: string; page?: number; limit?: number }) => Promise<any[]>;
   fetchProductVariants: (productId: string) => Promise<any[]>;
+  search?: string;
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
@@ -35,6 +36,8 @@ export const ProductProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+
+  
   // Fetch Wishlist từ API
   const fetchWishlist = async (userId: string) => {
     setLoading(true);
@@ -131,7 +134,7 @@ const removeFromWishlist = async (wishlistId) => {
 
 
   // Kiểm tra sản phẩm đã có trong wishlist chưa
-  const isInWishlist = (productId: string) =>
+    const isInWishlist = (productId: string) =>
     wishlist.some(item => item.ProductID === productId);
 
   // Lấy WishlistID theo ProductID

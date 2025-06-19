@@ -1,7 +1,7 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import React, { useEffect, useRef, useState, useMemo,useCallback } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -21,10 +21,10 @@ import { useProducts } from '../../store/useProducts';
 import AdvancedFilterModal from '../components/AdvancedFilterModal';
 import { useFocusEffect } from 'expo-router';
 import AxiosInstance from '../../axiosInstance/AxiosInstance';
-export default function HomeScreen() {
 
+export default function HomeScreen() {
   const { user, loadUser, setUser } = useAuth();
-  const { categories, products, fetchProducts, loading, error } = useProducts();
+  const { categories, products, fetchProducts, loading, error, fetchCategories, fetchWishlist, wishlist, addToWishlist, removeFromWishlist, isInWishlist, getWishlistId, fetchProductVariants } = useProducts();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -33,51 +33,59 @@ export default function HomeScreen() {
   const [selectedRating, setSelectedRating] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const { fetchCategories, fetchWishlist } = useProducts();
-  const [page, setPage] = useState(1); 
-  const { wishlist, addToWishlist, removeFromWishlist, isInWishlist, getWishlistId } = useProducts(); 
-  const { fetchProductVariants } = useProducts(); 
+  const [page, setPage] = useState(1);
+
   useFocusEffect(
     useCallback(() => {
-      fetchCategories(),
-    fetchProducts({ categoryId: 'all', page: 1, limit: 10 }),
-    loadFavorites(),
-    user?._id ? fetchWishlist(user._id) : Promise.resolve()
+      const loadData = async () => {
+        await Promise.all([
+          fetchCategories(),
+          fetchProducts({ categoryId: 'all', page: 1, limit: 10 }),
+          loadFavorites(),
+          user?._id ? fetchWishlist(user._id) : Promise.resolve(),
+        ]);
+      };
+      loadData();
     }, [user])
   );
+
   const onRefresh = async () => {
-  setRefreshing(true);
-  await Promise.all([
-    fetchCategories(),
-    fetchProducts({ categoryId: 'all', page: 1, limit: 10 }),
-    loadFavorites(),
-    user?._id ? fetchWishlist(user._id) : Promise.resolve(),
-  ]);
-  setSelectedCategory('');
-  setSelectedRating(0);
-  setPriceRange([0, 1000000]);
-  setPage(1);
-  setRefreshing(false);
-};
+    setRefreshing(true);
+    await Promise.all([
+      fetchCategories(),
+      fetchProducts({ categoryId: 'all', page: 1, limit: 10 }),
+      loadFavorites(),
+      user?._id ? fetchWishlist(user._id) : Promise.resolve(),
+    ]);
+    setSelectedCategory('');
+    setSelectedRating(0);
+    setPriceRange([0, 1000000]);
+    setPage(1);
+    setRefreshing(false);
+  };
+
   useEffect(() => {
-    loadUser();
-    loadFavorites();
-    fetchProducts({ categoryId: 'all', page: 1, limit: 10 });
+    const initialize = async () => {
+      await loadUser();
+      await loadFavorites();
+      await fetchProducts({ categoryId: 'all', page: 1, limit: 10 });
 
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 1200,
-      easing: Easing.ease,
-      useNativeDriver: true,
-    }).start();
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1200,
+        easing: Easing.ease,
+        useNativeDriver: true,
+      }).start();
 
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 1000,
-      delay: 400,
-      easing: Easing.out(Easing.exp),
-      useNativeDriver: true,
-    }).start();
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 1000,
+        delay: 400,
+        easing: Easing.out(Easing.exp),
+        useNativeDriver: true,
+      }).start();
+    };
+    initialize();
   }, []);
 
   const loadFavorites = async () => {
@@ -90,93 +98,53 @@ export default function HomeScreen() {
       console.error('Lỗi khi tải danh sách yêu thích:', err);
     }
   };
-  const toggleFavorite = async (productId: string) => {
+
+  const addToCartServer = async (product: any) => {
+    if (!user?._id) {
+      Alert.alert('Lỗi', 'Vui lòng đăng nhập để thêm vào giỏ hàng!');
+      return;
+    }
+
+    let variants = [];
+    try {
+      variants = await fetchProductVariants(product.ProductID);
+    } catch (err) {
+      Alert.alert('Lỗi', 'Không thể lấy biến thể sản phẩm!');
+      return;
+    }
+
+    if (!variants || variants.length === 0) {
+      Alert.alert('Lỗi', 'Sản phẩm này đã dừng kinh doanh!');
+      return;
+    }
+
+    const variantId = variants[0]._id;
+
+    try {
+      await AxiosInstance().post('/cart', {
+        userID: user._id,
+        productVariant: variantId,
+        soluong: 1,
+      });
+      Alert.alert('Thành công', `${product.Name} đã được thêm vào giỏ hàng!`);
+    } catch (err: any) {
+      Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể thêm vào giỏ hàng.');
+      console.log('Cart API error:', err?.response || err);
+    }
+  };
+
+  const handleToggleWishlist = (product: any) => {
     if (!user?._id) {
       Alert.alert('Lỗi', 'Vui lòng đăng nhập để thêm vào danh sách yêu thích.');
       return;
     }
-
-    const isFavorited = favorites.includes(productId);
-    try {
-      const response = await fetch('https://datn-sever.onrender.com/wishlist', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userID: user._id,
-          productID: productId,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const updatedFavorites = isFavorited
-        ? favorites.filter((id) => id !== productId)
-        : [...favorites, productId];
-      await AsyncStorage.setItem('favorites', JSON.stringify(updatedFavorites));
-      setFavorites(updatedFavorites);
-      Alert.alert('Thành công', isFavorited ? 'Đã xóa khỏi danh sách yêu thích.' : 'Đã thêm vào danh sách yêu thích.');
-    } catch (error) {
-      console.error('Lỗi khi thêm/xóa yêu thích:', error);
-      Alert.alert('Lỗi', 'Không thể cập nhật danh sách yêu thích.');
+    if (isInWishlist(product.ProductID)) {
+      const wishId = getWishlistId(product.ProductID);
+      if (wishId) removeFromWishlist(wishId);
+    } else {
+      addToWishlist(product, user._id);
     }
   };
-
- const addToCartServer = async (product: any) => {
-  if (!user?._id) {
-    Alert.alert('Lỗi', 'Vui lòng đăng nhập để thêm vào giỏ hàng!');
-    return;
-  }
-
-  // Gọi hàm fetchProductVariants lấy variant theo ProductID
-  let variants = [];
-  try {
-    variants = await fetchProductVariants(product.ProductID);
-  } catch (err) {
-    Alert.alert('Lỗi', 'Không thể lấy biến thể sản phẩm!');
-    return;
-  }
-
-  if (!variants || variants.length === 0) {
-    Alert.alert('Lỗi', 'Sản phầm này đã dừng kinh doanh!');
-    return;
-  }
-
-  // Lấy variant đầu tiên hoặc cho user chọn nếu muốn
-  const variantId = variants[0]._id;
-
-  try {
-    await AxiosInstance().post('/cart', {
-      userID: user._id,
-      productVariant: variantId,
-      soluong: 1,
-    });
-    Alert.alert('Thành công', `${product.Name} đã được thêm vào giỏ hàng!`);
-  } catch (err: any) {
-    Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể thêm vào giỏ hàng.');
-    console.log('Cart API error:', err?.response || err);
-  }
-};
-
-
-const handleToggleWishlist = (product) => {
-  if (!user?._id) {
-    Alert.alert('Lỗi', 'Vui lòng đăng nhập để thêm vào danh sách yêu thích.');
-    return;
-  }
-  if (isInWishlist(product.ProductID)) {
-    // Nếu đã có, bấm sẽ xoá
-    const wishId = getWishlistId(product.ProductID);
-    if (wishId) removeFromWishlist(wishId);
-  } else {
-    // Nếu chưa có, bấm sẽ thêm
-    addToWishlist(product, user._id);
-  }
-};
-
 
   const navigateToCategory = async (categoryId: string) => {
     try {
@@ -257,86 +225,92 @@ const handleToggleWishlist = (product) => {
 
   const renderItem = ({ item }: any) => {
     switch (item.type) {
-      case 'search':
+     case 'search':
         return (
-          <View style={styles.searchContainer}>
-            <TextInput style={styles.searchInput} placeholder="Tìm kiếm" placeholderTextColor="#999" />
-            <MaterialIcons name="search" size={24} color="#8B4513" style={styles.searchIcon} />
-            <TouchableOpacity onPress={() => setFilterModalVisible(true)}>
-              <MaterialIcons name="filter-list" size={24} color="#8B4513" style={styles.filterIcon} />
-            </TouchableOpacity>
-          </View>
-        );
+                <View style={styles.searchContainer}>
+                  <TouchableOpacity
+                    style={{ flex: 1 }}
+                    onPress={() => router.push({ pathname: './SearchScreen' })} // Chuyển hướng đến trang tìm kiếm
+                  >
+                    <TextInput
+                      style={styles.searchInput}
+                      placeholder="Tìm kiếm"
+                      placeholderTextColor="#999"
+                      editable={false} // Ngăn nhập liệu trực tiếp trên HomeScreen
+                    />
+                  </TouchableOpacity>
+                  <MaterialIcons name="search" size={24} color="#8B4513" style={styles.searchIcon} />
+                  <TouchableOpacity onPress={() => setFilterModalVisible(true)}>
+                    <MaterialIcons name="filter-list" size={24} color="#8B4513" style={styles.filterIcon} />
+                  </TouchableOpacity>
+                </View>
+         );
       case 'banner':
-  return (
-    <Animated.View style={[styles.bannerCarouselContainer, { opacity: fadeAnim }]}>
-      <ScrollView
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        style={{ flex: 1 }}
-      >
-        {/* Banner 1 */}
-        <View style={styles.bannerItem}>
-          <Image
-            source={{ uri: 'https://theme.hstatic.net/1000090364/1001154354/14/slider_1.jpg?v=739' }}
-            style={styles.bannerImage}
-          />
-          <View style={styles.bannerOverlay}>
-            <Text style={styles.bannerTitle}>Big Sale</Text>
-            <Text style={styles.bannerSubtitle}>Giảm đến 50%</Text>
-            <TouchableOpacity
-              style={styles.bannerButton}
-              onPress={() => navigateToCategory(categories[0]?.CategoryID || '')}
+        return (
+          <Animated.View style={[styles.bannerCarouselContainer, { opacity: fadeAnim }]}>
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              style={{ flex: 1 }}
             >
-              <Text style={styles.bannerButtonText}>SHOP NOW</Text>
-          </TouchableOpacity>
-          </View>
-        </View>
-        {/* Banner 2 */}
-        <View style={styles.bannerItem}>
-          <Image
-            source={{ uri: 'https://theme.hstatic.net/1000090364/1001154354/14/slider_1.jpg?v=739' }}
-            style={styles.bannerImage}
-          />
-          <View style={styles.bannerOverlay}>
-            <Text style={styles.bannerTitle}>Hàng Mới Về</Text>
-            <Text style={styles.bannerSubtitle}>Nhiều mẫu đẹp</Text>
-            <TouchableOpacity
-              style={styles.bannerButton}
-              onPress={() => navigateToCategory(categories[0]?.CategoryID || '')}
-            >
-            <Text style={styles.bannerButtonText}>SHOP NOW</Text>
-          </TouchableOpacity>
-          </View>
-        </View>
-        {/* Banner 3 */}
-        <View style={styles.bannerItem}>
-          <Image
-            source={{ uri: 'https://theme.hstatic.net/1000090364/1001154354/14/slider_1.jpg?v=739' }}
-            style={styles.bannerImage}
-          />
-          <View style={styles.bannerOverlay}>
-            <Text style={styles.bannerTitle}>Voucher Tháng 6</Text>
-            <Text style={styles.bannerSubtitle}>Săn deal cực sốc</Text>
-            <TouchableOpacity
-              style={styles.bannerButton}
-              onPress={() => navigateToCategory(categories[0]?.CategoryID || '')}
-            >
-              <Text style={styles.bannerButtonText}>SHOP NOW</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-        
-      </ScrollView>
-    </Animated.View>
-  );
+              <View style={styles.bannerItem}>
+                <Image
+                  source={{ uri: 'https://theme.hstatic.net/1000090364/1001154354/14/slider_1.jpg?v=739' }}
+                  style={styles.bannerImage}
+                />
+                <View style={styles.bannerOverlay}>
+                  <Text style={styles.bannerTitle}>Big Sale</Text>
+                  <Text style={styles.bannerSubtitle}>Giảm đến 50%</Text>
+                  <TouchableOpacity
+                    style={styles.bannerButton}
+                    onPress={() => navigateToCategory(categories[0]?.CategoryID || '')}
+                  >
+                    <Text style={styles.bannerButtonText}>SHOP NOW</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <View style={styles.bannerItem}>
+                <Image
+                  source={{ uri: 'https://theme.hstatic.net/1000090364/1001154354/14/slider_1.jpg?v=739' }}
+                  style={styles.bannerImage}
+                />
+                <View style={styles.bannerOverlay}>
+                  <Text style={styles.bannerTitle}>Hàng Mới Về</Text>
+                  <Text style={styles.bannerSubtitle}>Nhiều mẫu đẹp</Text>
+                  <TouchableOpacity
+                    style={styles.bannerButton}
+                    onPress={() => navigateToCategory(categories[0]?.CategoryID || '')}
+                  >
+                    <Text style={styles.bannerButtonText}>SHOP NOW</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <View style={styles.bannerItem}>
+                <Image
+                  source={{ uri: 'https://theme.hstatic.net/1000090364/1001154354/14/slider_1.jpg?v=739' }}
+                  style={styles.bannerImage}
+                />
+                <View style={styles.bannerOverlay}>
+                  <Text style={styles.bannerTitle}>Voucher Tháng 6</Text>
+                  <Text style={styles.bannerSubtitle}>Săn deal cực sốc</Text>
+                  <TouchableOpacity
+                    style={styles.bannerButton}
+                    onPress={() => navigateToCategory(categories[0]?.CategoryID || '')}
+                  >
+                    <Text style={styles.bannerButtonText}>SHOP NOW</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          </Animated.View>
+        );
       case 'categories':
         return (
           <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim }] }]}>
             <View style={styles.categoryHeader}>
               <Text style={styles.sectionTitle}>Danh Mục</Text>
-              <TouchableOpacity onPress={() =>router.push({ pathname: './categoryDetail' })}>
+              <TouchableOpacity onPress={() => router.push({ pathname: './categoryDetail' })}>
                 <Text style={styles.viewAllText}>Xem tất cả</Text>
               </TouchableOpacity>
             </View>
@@ -367,9 +341,9 @@ const handleToggleWishlist = (product) => {
               <Ionicons name="heart" size={28} color="#FF5161" />
               <Text style={styles.quickAccessLabel}>Yêu thích</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickAccessItem} onPress={() => router.push('/orders')}>
+            <TouchableOpacity style={styles.quickAccessItem} onPress={() => router.push('./video')}>
               <Ionicons name="receipt" size={28} color="#4287f5" />
-              <Text style={styles.quickAccessLabel}>Đơn mua</Text>
+              <Text style={styles.quickAccessLabel}>Video</Text>
             </TouchableOpacity>
           </View>
         );
@@ -416,17 +390,16 @@ const handleToggleWishlist = (product) => {
                       style={styles.productImage}
                       defaultSource={{ uri: 'https://via.placeholder.com/150' }}
                     />
-                 <TouchableOpacity
-                    style={styles.favoriteButton}
-                    onPress={() => handleToggleWishlist(product)}
-                  >
-                    <Ionicons
-                      name={isInWishlist(product.ProductID) ? 'heart' : 'heart-outline'}
-                      size={20}
-                      color={isInWishlist(product.ProductID) ? '#FF0000' : '#8B4513'}
-                    />
-                  </TouchableOpacity>
-
+                    <TouchableOpacity
+                      style={styles.favoriteButton}
+                      onPress={() => handleToggleWishlist(product)}
+                    >
+                      <Ionicons
+                        name={isInWishlist(product.ProductID) ? 'heart' : 'heart-outline'}
+                        size={20}
+                        color={isInWishlist(product.ProductID) ? '#FF0000' : '#8B4513'}
+                      />
+                    </TouchableOpacity>
                   </View>
                   <View style={styles.productInfo}>
                     <Text style={styles.productName} numberOfLines={1} ellipsizeMode="tail">
@@ -472,6 +445,7 @@ const handleToggleWishlist = (product) => {
         contentContainerStyle={styles.scrollContent}
         refreshing={refreshing}
         onRefresh={onRefresh}
+        showsVerticalScrollIndicator={false}
       />
       <AdvancedFilterModal
         visible={filterModalVisible}
@@ -498,7 +472,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   bannerItem: {
-    width: 340, // hoặc Dimensions.get('window').width - margin*2
+    width: 340,
     height: 150,
     position: 'relative',
     marginRight: 12,
@@ -510,7 +484,10 @@ const styles = StyleSheet.create({
   },
   bannerOverlay: {
     position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -525,8 +502,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 13,
   },
-
-    quickAccessContainer: {
+  quickAccessContainer: {
     flexDirection: 'row',
     backgroundColor: '#fff',
     marginHorizontal: 15,
@@ -557,6 +533,7 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
   },
   searchContainer: {
+    marginTop: 50,
     flexDirection: 'row',
     alignItems: 'center',
     margin: 15,
@@ -582,31 +559,6 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     overflow: 'hidden',
     marginBottom: 20,
-  },
-  bannerImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  bannerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bannerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  bannerSubtitle: {
-    fontSize: 14,
-    color: '#fff',
-    marginVertical: 5,
   },
   bannerButton: {
     backgroundColor: '#fff',
