@@ -148,7 +148,7 @@ const ChatWithShop = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f6fa' },
+  container: { flex: 1, backgroundColor: '#f5f6fa', marginTop : 20, },
   keyboardContainer: { flex: 1 },
   header: {
     flexDirection: 'row',
