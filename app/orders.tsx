@@ -1,5 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
@@ -11,7 +19,7 @@ const TAB_OPTIONS = [
   'Đã thanh toán',
   'Đang giao',
   'Đã giao',
-  'Đã hủy'
+  'Đã hủy',
 ];
 
 const Orders = () => {
@@ -20,36 +28,40 @@ const Orders = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('Tất cả');
+  const [refreshing, setRefreshing] = useState(false);
 
+  // Tách fetchOrders ra cho dùng lại được
+  const fetchOrders = useCallback(async () => {
+    if (!user?._id) return;
+    setLoading(true);
+    try {
+      const response = await AxiosInstance().get(`/order/user/${user._id}`);
+      setOrders(response || []);
+      setError(null);
+    } catch (err) {
+      setError('Không thể tải đơn hàng. Vui lòng thử lại sau.');
+      setOrders([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false); // stop refresh
+    }
+  }, [user]);
+
+  // useEffect load dữ liệu khi user đã có
   useEffect(() => {
     if (!user?._id) {
       loadUser();
       return;
     }
-
-    const fetchOrders = async () => {
-      setLoading(true);
-      try {
-        const response = await AxiosInstance().get(`/order/user/${user._id}`);
-        setOrders(response || []);
-        console.log(response)
-        setError(null);
-      } catch (err) {
-        setError('Không thể tải đơn hàng. Vui lòng thử lại sau.');
-        setOrders([]);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchOrders();
-  }, [user]);
+  }, [user, loadUser, fetchOrders]);
 
   const navigateToOrderDetail = (orderId) => {
     router.push({ pathname: './orderDetail', params: { orderId: orderId.toString() } });
   };
 
   const goBack = () => {
-    router.back();
+    router.push({ pathname: './home' });
   };
 
   // Lọc đơn hàng theo tab
@@ -111,7 +123,7 @@ const Orders = () => {
     return (
       <View style={styles.container}>
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => loadUser()}>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchOrders}>
           <Text style={styles.retryButtonText}>Thử lại</Text>
         </TouchableOpacity>
       </View>
@@ -119,7 +131,20 @@ const Orders = () => {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => {
+            setRefreshing(true);
+            fetchOrders();
+          }}
+          colors={['#8B5A2B']}
+          tintColor="#8B5A2B"
+        />
+      }
+    >
       <View style={styles.header}>
         <TouchableOpacity onPress={goBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={28} color="#ffffff" />
@@ -220,7 +245,7 @@ const Orders = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7f7f7', padding: 16 },
+  container: { flex: 1, backgroundColor: '#f7f7f7', padding: 16,marginTop : 40 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f7f7f7' },
   loadingText: { marginTop: 10, fontSize: 16, color: '#666' },
   header: {

@@ -4,7 +4,6 @@ import { router } from 'expo-router';
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Easing,
   Image,
@@ -19,6 +18,7 @@ import { FlashList } from '@shopify/flash-list';
 import { useAuth } from '../../store/useAuth';
 import { useProducts } from '../../store/useProducts';
 import AdvancedFilterModal from '../components/AdvancedFilterModal';
+import CustomModal from '../components/CustomModal';
 import { useFocusEffect } from 'expo-router';
 import AxiosInstance from '../../axiosInstance/AxiosInstance';
 
@@ -34,6 +34,17 @@ export default function HomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalConfig, setModalConfig] = useState({
+    type: 'success' as 'success' | 'error' | 'warning',
+    title: '',
+    message: '',
+  });
+
+  const showModal = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
+    setModalConfig({ type, title, message });
+    setModalVisible(true);
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -101,7 +112,7 @@ export default function HomeScreen() {
 
   const addToCartServer = async (product: any) => {
     if (!user?._id) {
-      Alert.alert('Lỗi', 'Vui lòng đăng nhập để thêm vào giỏ hàng!');
+      showModal('error', 'Lỗi', 'Vui lòng đăng nhập để thêm vào giỏ hàng!');
       return;
     }
 
@@ -109,12 +120,12 @@ export default function HomeScreen() {
     try {
       variants = await fetchProductVariants(product.ProductID);
     } catch (err) {
-      Alert.alert('Lỗi', 'Không thể lấy biến thể sản phẩm!');
+      showModal('error', 'Lỗi', 'Không thể lấy biến thể sản phẩm!');
       return;
     }
 
     if (!variants || variants.length === 0) {
-      Alert.alert('Lỗi', 'Sản phẩm này đã dừng kinh doanh!');
+      showModal('error', 'Lỗi', 'Sản phẩm này đã dừng kinh doanh!');
       return;
     }
 
@@ -126,16 +137,16 @@ export default function HomeScreen() {
         productVariant: variantId,
         soluong: 1,
       });
-      Alert.alert('Thành công', `${product.Name} đã được thêm vào giỏ hàng!`);
+      showModal('success', 'Thành công', `${product.Name} đã được thêm vào giỏ hàng!`);
     } catch (err: any) {
-      Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể thêm vào giỏ hàng.');
+      showModal('error', 'Lỗi', err?.response?.data?.message || 'Không thể thêm vào giỏ hàng.');
       console.log('Cart API error:', err?.response || err);
     }
   };
 
   const handleToggleWishlist = (product: any) => {
     if (!user?._id) {
-      Alert.alert('Lỗi', 'Vui lòng đăng nhập để thêm vào danh sách yêu thích.');
+      showModal('error', 'Lỗi', 'Vui lòng đăng nhập để thêm vào danh sách yêu thích.');
       return;
     }
     if (isInWishlist(product.ProductID)) {
@@ -153,7 +164,7 @@ export default function HomeScreen() {
       router.push({ pathname: './products', params: { categoryId } });
     } catch (err) {
       console.error('Lỗi khi tải sản phẩm:', err);
-      Alert.alert('Lỗi', 'Không thể tải sản phẩm.');
+      showModal('error', 'Lỗi', 'Không thể tải sản phẩm.');
     }
   };
 
@@ -183,7 +194,7 @@ export default function HomeScreen() {
       setPage(nextPage);
     } catch (err) {
       console.error('Lỗi khi tải thêm sản phẩm:', err);
-      Alert.alert('Lỗi', 'Không thể tải thêm sản phẩm.');
+      showModal('error', 'Lỗi', 'Không thể tải thêm sản phẩm.');
     }
   };
 
@@ -225,26 +236,26 @@ export default function HomeScreen() {
 
   const renderItem = ({ item }: any) => {
     switch (item.type) {
-     case 'search':
+      case 'search':
         return (
-                <View style={styles.searchContainer}>
-                  <TouchableOpacity
-                    style={{ flex: 1 }}
-                    onPress={() => router.push({ pathname: './SearchScreen' })} // Chuyển hướng đến trang tìm kiếm
-                  >
-                    <TextInput
-                      style={styles.searchInput}
-                      placeholder="Tìm kiếm"
-                      placeholderTextColor="#999"
-                      editable={false} // Ngăn nhập liệu trực tiếp trên HomeScreen
-                    />
-                  </TouchableOpacity>
-                  <MaterialIcons name="search" size={24} color="#8B4513" style={styles.searchIcon} />
-                  <TouchableOpacity onPress={() => setFilterModalVisible(true)}>
-                    <MaterialIcons name="filter-list" size={24} color="#8B4513" style={styles.filterIcon} />
-                  </TouchableOpacity>
-                </View>
-         );
+          <View style={styles.searchContainer}>
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              onPress={() => router.push({ pathname: './SearchScreen' })}
+            >
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Tìm kiếm"
+                placeholderTextColor="#999"
+                editable={false}
+              />
+            </TouchableOpacity>
+            <MaterialIcons name="search" size={24} color="#8B4513" style={styles.searchIcon} />
+            <TouchableOpacity onPress={() => setFilterModalVisible(true)}>
+              <MaterialIcons name="filter-list" size={24} color="#8B4513" style={styles.filterIcon} />
+            </TouchableOpacity>
+          </View>
+        );
       case 'banner':
         return (
           <Animated.View style={[styles.bannerCarouselContainer, { opacity: fadeAnim }]}>
@@ -459,9 +470,17 @@ export default function HomeScreen() {
         categories={categories}
         onApplyFilters={applyFilters}
       />
+      <CustomModal
+        isVisible={modalVisible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        onClose={() => setModalVisible(false)}
+      />
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   bannerCarouselContainer: {

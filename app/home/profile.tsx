@@ -72,8 +72,8 @@ const ProfileScreen = () => {
           <Ionicons name="chevron-forward" size={20} color="#8B5A2B" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/privacy')}>
-          <MaterialIcons name="security" size={24} color="#8B5A2B" />
-          <Text style={styles.menuText}>Chính sách bảo mật</Text>
+          <MaterialIcons name="local-offer" size={24} color="#8B5A2B" />
+          <Text style={styles.menuText}>Vorcher</Text>
           <Ionicons name="chevron-forward" size={20} color="#8B5A2B" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/addressDetail')}>

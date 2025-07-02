@@ -4,7 +4,7 @@ import { ActivityIndicator, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ProductProvider } from '../store/useProducts';
 import { GestureHandlerRootView } from 'react-native-gesture-handler'; // Thêm import này
-
+import { StripeProvider } from '@stripe/stripe-react-native'; 
 export default function RootLayout() {
   const [checkingLogin, setCheckingLogin] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -35,6 +35,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+       <StripeProvider publishableKey="pk_test_51RgKzePvoIcsq5u2eVmhcJ8cgf1m6w5CgGDb6J4TSfRPovJxCP1vPMelS2Bm6fvgglD4QSxVTtdQqLPmmgfmG29G009Vy0WQBL">
       <ProductProvider>
         <Stack
           initialRouteName={isLoggedIn ? 'home' : 'index'}
@@ -51,6 +52,7 @@ export default function RootLayout() {
           <Stack.Screen name="OTPScreen" />
         </Stack>
       </ProductProvider>
+      </StripeProvider>
     </GestureHandlerRootView>
   );
 }
