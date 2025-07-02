@@ -5,7 +5,8 @@ import { useProducts } from '../store/useProducts';
 import { useAuth } from '../store/useAuth';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
 import { Ionicons } from '@expo/vector-icons';  
-
+import RenderHtml from 'react-native-render-html';
+import { useWindowDimensions } from 'react-native';
 
 // Hàm gọi API thêm vào giỏ hàng
 const addToCartAPI = async (userID, productVariant, soluong) => {
@@ -50,7 +51,7 @@ const ProductDetail = () => {
   const { user } = useAuth();
   const [reviews, setReviews] = useState([]);
   const [reviewTab, setReviewTab] = useState(0);
-
+  const { width } = useWindowDimensions();  
   // Review form state
   const [reviewComment, setReviewComment] = useState('');
   const [reviewRating, setReviewRating] = useState(5);
@@ -216,223 +217,218 @@ const handleBuyNow = useCallback(async () => {
 
   return (
     <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 70 }}>
-        {/* Ảnh sản phẩm */}
-        <Image source={{ uri: product.Image }} style={styles.image} />
-        <View style={styles.details}>
-          <Text style={styles.name}>{product.Name}</Text>
-         <View style={styles.priceContainer}>
-            <Text style={styles.price}>{product.Price} VNĐ</Text>
-            <View style={styles.ratingContainer}>
-              {[1, 2, 3, 4, 5].map(i => (
-                <Ionicons
-                  key={i}
-                  name={
-                    product.Rating >= i
-                      ? 'star'
-                      : product.Rating >= i - 0.5
-                      ? 'star-half'
-                      : 'star-outline'
-                  }
-                  size={16}
-                  color="#FFD700"
-                  style={{ marginRight: 1 }}
-                />
-              ))}
-              <Text style={styles.ratingText}>
-                {` ${product.Rating ? product.Rating.toFixed(1) : '0.0'} (${totalReview} đánh giá)`}
-              </Text>
-            </View>
-         </View>
-          <Text style={styles.description}>{product.Description || 'Không có mô tả'}</Text>
-          <Text style={styles.section}>Màu sắc</Text>
-          <View style={styles.variantRow}>
-            {colors.map((color) => (
-              <TouchableOpacity
-                key={color}
-                style={[
-                  styles.variantButton,
-                  selectedVariant?.color === color
-                    ? styles.selectedVariantButton
-                    : null,
-                ]}
-                onPress={() => {
-                  const variant = variants.find((v) => v.color === color);
-                  setSelectedVariant(variant);
-                }}
-              >
-                <Text style={styles.variantButtonText}>{color}</Text>
-              </TouchableOpacity>
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: 70 }}
+    >
+      {/* Ảnh sản phẩm */}
+      <Image source={{ uri: product.Image }} style={styles.image} />
+      <View style={styles.details}>
+        <Text style={styles.name}>{product.Name}</Text>
+        <View style={styles.priceContainer}>
+          <Text style={styles.price}>{product.Price} VNĐ</Text>
+          <View style={styles.ratingContainer}>
+            {[1, 2, 3, 4, 5].map(i => (
+              <Ionicons
+                key={i}
+                name={
+                  product.Rating >= i
+                    ? 'star'
+                    : product.Rating >= i - 0.5
+                    ? 'star-half'
+                    : 'star-outline'
+                }
+                size={16}
+                color="#FFD700"
+                style={{ marginRight: 1 }}
+              />
             ))}
+            <Text style={styles.ratingText}>
+              {` ${product.Rating ? product.Rating.toFixed(1) : '0.0'} (${totalReview} đánh giá)`}
+            </Text>
           </View>
-          {selectedVariant &&
-            sizesByColor(selectedVariant.color).length > 0 && (
-              <>
-                <Text style={styles.section}>Kích thước</Text>
-                <View style={styles.variantRow}>
-                  {sizesByColor(selectedVariant.color).map((size) => (
-                    <TouchableOpacity
-                      key={size}
-                      style={[
-                        styles.variantButton,
-                        selectedVariant?.size === size
-                          ? styles.selectedVariantButton
-                          : null,
-                      ]}
-                      onPress={() => {
-                        const variant = variants.find(
-                          (v) =>
-                            v.color === selectedVariant.color &&
-                            v.size === size
-                        );
-                        setSelectedVariant(variant);
-                      }}
-                    >
-                      <Text style={styles.variantButtonText}>{size}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </>
-            )}
-          {selectedVariant && (
+        </View>
+
+        {/* Thay vì <Text style={styles.description}>{product.Description || 'Không có mô tả'}</Text> */}
+        <View style={{ minHeight: 40, marginBottom: 15 }}>
+          <RenderHtml
+            contentWidth={width - 30} // padding 15 mỗi bên
+            source={{ html: product.Description || '<i>Không có mô tả</i>' }}
+            tagsStyles={{
+              p: { color: '#666', fontSize: 14, marginBottom: 6 },
+              h1: { fontSize: 20, fontWeight: '700', marginBottom: 8, color: '#222' },
+              h2: { fontSize: 18, fontWeight: '700', marginBottom: 6, color: '#222' },
+              h3: { fontSize: 16, fontWeight: '600', marginBottom: 5, color: '#333' },
+              ul: { marginBottom: 6 },
+              li: { color: '#666', fontSize: 14 },
+              strong: { fontWeight: 'bold', color: '#333' },
+              em: { fontStyle: 'italic', color: '#666' },
+              a: { color: '#3498db', textDecorationLine: 'underline' },
+            }}
+            defaultTextProps={{
+              selectable: true,
+              numberOfLines: undefined,
+              ellipsizeMode: 'tail',
+            }}
+          />
+        </View>
+
+        <Text style={styles.section}>Màu sắc</Text>
+        <View style={styles.variantRow}>
+          {colors.map((color) => (
+            <TouchableOpacity
+              key={color}
+              style={[
+                styles.variantButton,
+                selectedVariant?.color === color
+                  ? styles.selectedVariantButton
+                  : null,
+              ]}
+              onPress={() => {
+                const variant = variants.find((v) => v.color === color);
+                setSelectedVariant(variant);
+              }}
+            >
+              <Text style={styles.variantButtonText}>{color}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {selectedVariant &&
+          sizesByColor(selectedVariant.color).length > 0 && (
             <>
-              <Text style={styles.section}>Số lượng</Text>
-              <View style={styles.quantityContainer}>
-                <TouchableOpacity
-                  style={styles.quantityButton}
-                  onPress={() => setQuantity((prev) => Math.max(1, prev - 1))}
-                  disabled={quantity <= 1}
-                >
-                  <Text style={styles.quantityButtonText}>-</Text>
-                </TouchableOpacity>
-                <TextInput
-                  style={styles.quantityInput}
-                  value={quantity.toString()}
-                  keyboardType="numeric"
-                  onChangeText={(text) => {
-                    const num = parseInt(text) || 1;
-                    if (num <= (selectedVariant?.stock || 1)) setQuantity(num);
-                  }}
-                />
-                <TouchableOpacity
-                  style={styles.quantityButton}
-                  onPress={() =>
-                    setQuantity((prev) =>
-                      prev < (selectedVariant?.stock || 1) ? prev + 1 : prev
-                    )
-                  }
-                  disabled={quantity >= (selectedVariant?.stock || 1)}
-                >
-                  <Text style={styles.quantityButtonText}>+</Text>
-                </TouchableOpacity>
-                <Text style={styles.stockText}>Tồn kho: {selectedVariant?.stock || 0}</Text>
+              <Text style={styles.section}>Kích thước</Text>
+              <View style={styles.variantRow}>
+                {sizesByColor(selectedVariant.color).map((size) => (
+                  <TouchableOpacity
+                    key={size}
+                    style={[
+                      styles.variantButton,
+                      selectedVariant?.size === size
+                        ? styles.selectedVariantButton
+                        : null,
+                    ]}
+                    onPress={() => {
+                      const variant = variants.find(
+                        (v) =>
+                          v.color === selectedVariant.color &&
+                          v.size === size
+                      );
+                      setSelectedVariant(variant);
+                    }}
+                  >
+                    <Text style={styles.variantButtonText}>{size}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </>
           )}
+        {selectedVariant && (
+          <>
+            <Text style={styles.section}>Số lượng</Text>
+            <View style={styles.quantityContainer}>
+              <TouchableOpacity
+                style={styles.quantityButton}
+                onPress={() => setQuantity((prev) => Math.max(1, prev - 1))}
+                disabled={quantity <= 1}
+              >
+                <Text style={styles.quantityButtonText}>-</Text>
+              </TouchableOpacity>
+              <TextInput
+                style={styles.quantityInput}
+                value={quantity.toString()}
+                keyboardType="numeric"
+                onChangeText={(text) => {
+                  const num = parseInt(text) || 1;
+                  if (num <= (selectedVariant?.stock || 1)) setQuantity(num);
+                }}
+              />
+              <TouchableOpacity
+                style={styles.quantityButton}
+                onPress={() =>
+                  setQuantity((prev) =>
+                    prev < (selectedVariant?.stock || 1) ? prev + 1 : prev
+                  )
+                }
+                disabled={quantity >= (selectedVariant?.stock || 1)}
+              >
+                <Text style={styles.quantityButtonText}>+</Text>
+              </TouchableOpacity>
+              <Text style={styles.stockText}>Tồn kho: {selectedVariant?.stock || 0}</Text>
+            </View>
+          </>
+        )}
 
-          {/* Form gửi review */}
-          <Text style={[styles.section, { marginTop: 25 }]}>Viết đánh giá của bạn</Text>
-          <View style={styles.reviewInputContainer}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-              <Text style={{ fontSize: 14, marginRight: 8 }}>Đánh giá:</Text>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <TouchableOpacity key={star} onPress={() => setReviewRating(star)}>
+     
+
+        {/* Tabs + List review */}
+        <Text style={[styles.section, { marginTop: 28 }]}>Đánh giá sản phẩm</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+          {reviewTabs.map((tab) => (
+            <TouchableOpacity
+              key={tab.value}
+              style={[
+                styles.reviewTabButton,
+                reviewTab === tab.value && styles.activeReviewTab,
+              ]}
+              onPress={() => setReviewTab(tab.value)}
+            >
+              <Text
+                style={[
+                  styles.reviewTabText,
+                  reviewTab === tab.value && { color: '#ee4d2d', fontWeight: 'bold' },
+                ]}
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        {filteredReviews.length === 0 ? (
+          <Text style={{ color: '#666', fontStyle: 'italic' }}>Chưa có đánh giá nào cho sản phẩm này.</Text>
+        ) : (
+          filteredReviews.map((rv) => (
+            <View key={rv._id} style={styles.reviewCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="person-circle" size={28} color="#bbb" />
+                <Text style={{ marginLeft: 5, fontWeight: '600', color: '#333' }}>
+                  {rv.userID?.name || 'Người dùng'}
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 2 }}>
+                {[1, 2, 3, 4, 5].map((star) => (
                   <Ionicons
-                    name={star <= reviewRating ? 'star' : 'star-outline'}
-                    size={22}
+                    key={star}
+                    name={star <= rv.rating ? 'star' : 'star-outline'}
+                    size={15}
                     color="#FFD700"
                   />
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TextInput
-              placeholder="Nhập đánh giá của bạn..."
-              style={styles.reviewInput}
-              value={reviewComment}
-              onChangeText={setReviewComment}
-              multiline
-            />
-            <TouchableOpacity
-              style={[
-                styles.sendReviewBtn,
-                (sendingReview || !reviewComment.trim()) && { opacity: 0.6 },
-              ]}
-              onPress={handleSendReview}
-              disabled={sendingReview || !reviewComment.trim()}
-            >
-              <Text style={styles.sendReviewText}>{sendingReview ? 'Đang gửi...' : 'Gửi đánh giá'}</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Tabs + List review */}
-          <Text style={[styles.section, { marginTop: 28 }]}>Đánh giá sản phẩm</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
-            {reviewTabs.map((tab) => (
-              <TouchableOpacity
-                key={tab.value}
-                style={[
-                  styles.reviewTabButton,
-                  reviewTab === tab.value && styles.activeReviewTab,
-                ]}
-                onPress={() => setReviewTab(tab.value)}
-              >
-                <Text
-                  style={[
-                    styles.reviewTabText,
-                    reviewTab === tab.value && { color: '#ee4d2d', fontWeight: 'bold' },
-                  ]}
-                >
-                  {tab.label}
+                ))}
+                <Text style={{ fontSize: 12, color: '#888', marginLeft: 10 }}>
+                  {new Date(rv.reviewDate || rv.createdAt).toLocaleDateString()}
                 </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          {filteredReviews.length === 0 ? (
-            <Text style={{ color: '#666', fontStyle: 'italic' }}>Chưa có đánh giá nào cho sản phẩm này.</Text>
-          ) : (
-            filteredReviews.map((rv) => (
-              <View key={rv._id} style={styles.reviewCard}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name="person-circle" size={28} color="#bbb" />
-                  <Text style={{ marginLeft: 5, fontWeight: '600', color: '#333' }}>
-                    {rv.userID?.name || 'Người dùng'}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 2 }}>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Ionicons
-                      key={star}
-                      name={star <= rv.rating ? 'star' : 'star-outline'}
-                      size={15}
-                      color="#FFD700"
-                    />
-                  ))}
-                  <Text style={{ fontSize: 12, color: '#888', marginLeft: 10 }}>
-                    {new Date(rv.reviewDate || rv.createdAt).toLocaleDateString()}
-                  </Text>
-                </View>
-                <Text style={{ color: '#222', marginTop: 2 }}>{rv.comment}</Text>
               </View>
-            ))
-          )}
-        </View>
-      </ScrollView>
-      {variants.length > 0 && (
-        <View style={styles.actionContainer}>
-          <TouchableOpacity style={styles.addToCartButton} onPress={handleAddToCart}>
-            <Text style={styles.buttonText}>Thêm vào giỏ</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.buyNowButton} onPress={handleBuyNow}>
-            <Text style={styles.buttonText}>Mua ngay</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
+              <Text style={{ color: '#222', marginTop: 2 }}>{rv.comment}</Text>
+            </View>
+          ))
+        )}
+      </View>
+    </ScrollView>
+    {variants.length > 0 && (
+      <View style={styles.actionContainer}>
+        <TouchableOpacity style={styles.addToCartButton} onPress={handleAddToCart}>
+          <Text style={styles.buttonText}>Thêm vào giỏ</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.buyNowButton} onPress={handleBuyNow}>
+          <Text style={styles.buttonText}>Mua ngay</Text>
+        </TouchableOpacity>
+      </View>
+    )}
+  </View>
+);
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1, backgroundColor: '#fff',marginTop : 40 },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',

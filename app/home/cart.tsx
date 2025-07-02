@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ActivityIndicator, Image, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ActivityIndicator, Image, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { Trash2 } from 'lucide-react-native';
 import { useAuth } from '../../store/useAuth';
 import { useProducts } from '../../store/useProducts';
 import AxiosInstance from '../../axiosInstance/AxiosInstance';
 import { router, useFocusEffect } from 'expo-router';
+import CustomModal from '../components/CustomModal';
 
 const Cart = () => {
   const { user } = useAuth();
@@ -14,6 +15,26 @@ const Cart = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedItems, setSelectedItems] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalConfig, setModalConfig] = useState({
+    type: 'success' as 'success' | 'error' | 'warning',
+    title: '',
+    message: '',
+    showConfirmButton: false,
+    onConfirm: () => {},
+  });
+
+  const showModal = (
+    type: 'success' | 'error' | 'warning',
+    title: string,
+    message: string,
+    showConfirmButton = false,
+    onConfirm = () => {}
+  ) => {
+    setModalConfig({ type, title, message, showConfirmButton, onConfirm });
+    setModalVisible(true);
+  };
 
   const fetchCart = useCallback(async () => {
     if (!user?._id) {
@@ -28,6 +49,7 @@ const Cart = () => {
       setCart(response || []);
       setError(null);
       setSelectedItems(new Array(response.length).fill(false));
+      setSelectAll(false);
     } catch (err) {
       setError('Không thể tải giỏ hàng. Vui lòng thử lại.');
       setCart([]);
@@ -53,42 +75,39 @@ const Cart = () => {
   }, [user?._id, fetchCart]);
 
   const removeFromCart = async (cartId) => {
-    Alert.alert(
-      "Xác nhận",
-      "Bạn muốn xóa sản phẩm này khỏi giỏ hàng?",
-      [
-        { text: "Hủy", style: "cancel" },
-        {
-          text: "Xóa",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await AxiosInstance().delete(`/cart/${cartId}`);
-              setCart(prev => prev.filter(item => item._id !== cartId));
-              setSelectedItems(prev => prev.filter((_, i) => cart[i]?._id !== cartId));
-            } catch (err) {
-              Alert.alert('Lỗi', 'Không thể xóa sản phẩm khỏi giỏ hàng.');
-            }
-          }
+    showModal(
+      'warning',
+      'Xác nhận',
+      'Bạn muốn xóa sản phẩm này khỏi giỏ hàng?',
+      true,
+      async () => {
+        try {
+          await AxiosInstance().delete(`/cart/${cartId}`);
+          setCart((prev) => prev.filter((item) => item._id !== cartId));
+          setSelectedItems((prev) => prev.filter((_, i) => cart[i]?._id !== cartId));
+          setSelectAll(false);
+          showModal('success', 'Thành công', 'Sản phẩm đã được xóa khỏi giỏ hàng.');
+        } catch (err) {
+          showModal('error', 'Lỗi', 'Không thể xóa sản phẩm khỏi giỏ hàng.');
         }
-      ]
+      }
     );
   };
 
   const updateQuantity = async (cartId, value) => {
-    const cartItem = cart.find(item => item._id === cartId);
+    const cartItem = cart.find((item) => item._id === cartId);
     if (!cartItem) return;
     if (value === -1 && cartItem.soluong <= 1) return;
     try {
       const endpoint = value === -1 ? `/cart/${cartId}/decrease` : `/cart/${cartId}/increase`;
       await AxiosInstance().patch(endpoint);
-      setCart(prev =>
-        prev.map(item =>
+      setCart((prev) =>
+        prev.map((item) =>
           item._id === cartId ? { ...item, soluong: item.soluong + value } : item
         )
       );
     } catch (err) {
-      Alert.alert('Lỗi', 'Số lượng vượt quá tồn kho.');
+      showModal('error', 'Lỗi', 'Số lượng vượt quá tồn kho.');
     }
   };
 
@@ -102,11 +121,18 @@ const Cart = () => {
   };
 
   const toggleSelectItem = (index) => {
-    setSelectedItems(prev => {
+    setSelectedItems((prev) => {
       const newSelected = [...prev];
       newSelected[index] = !newSelected[index];
       return newSelected;
     });
+    setSelectAll(selectedItems.every((item, i) => (i === index ? !item : item)));
+  };
+
+  const toggleSelectAll = () => {
+    const newSelectAll = !selectAll;
+    setSelectAll(newSelectAll);
+    setSelectedItems(new Array(cart.length).fill(newSelectAll));
   };
 
   const getTotal = () => {
@@ -120,13 +146,13 @@ const Cart = () => {
   };
 
   const navigateToCheckout = () => {
-    if (cart.length === 0 || !selectedItems.some(item => item)) {
-      Alert.alert('Thông báo', 'Vui lòng chọn ít nhất một sản phẩm để thanh toán!');
+    if (cart.length === 0 || !selectedItems.some((item) => item)) {
+      showModal('error', 'Thông báo', 'Vui lòng chọn ít nhất một sản phẩm để thanh toán!');
       return;
     }
     const selectedProducts = cart
       .filter((_, index) => selectedItems[index])
-      .map(item => ({
+      .map((item) => ({
         cartId: item._id,
         productId: item.productVariant?.productID?._id,
         name: item.productVariant?.productID?.name,
@@ -134,7 +160,9 @@ const Cart = () => {
         size: item.productVariant?.size,
         price: item.productVariant?.productID?.price,
         quantity: item.soluong,
-        image: products.find(p => p.ProductID === item.productVariant?.productID?._id)?.Image || 'https://via.placeholder.com/120',
+        image:
+          products.find((p) => p.ProductID === item.productVariant?.productID?._id)?.Image ||
+          'https://via.placeholder.com/120',
       }));
 
     router.push({
@@ -162,13 +190,24 @@ const Cart = () => {
   return (
     <View style={styles.root}>
       <Text style={styles.title}>Giỏ hàng</Text>
+      {cart.length > 0 && (
+        <View style={styles.selectAllContainer}>
+          <TouchableOpacity
+            style={[styles.checkbox, selectAll ? styles.checkboxSelected : null]}
+            onPress={toggleSelectAll}
+          >
+            {selectAll && <Text style={styles.checkboxText}>✓</Text>}
+          </TouchableOpacity>
+          <Text style={styles.selectAllText}>Chọn tất cả</Text>
+        </View>
+      )}
       {cart.length === 0 ? (
         <Text style={styles.emptyText}>Giỏ hàng trống</Text>
       ) : (
         <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 90 }}>
           {cart.map((item, idx) => {
             const productId = item.productVariant?.productID?._id;
-            const productInList = products.find(p => p.ProductID === productId);
+            const productInList = products.find((p) => p.ProductID === productId);
             const imgUrl = productInList?.Image || 'https://via.placeholder.com/120';
 
             return (
@@ -190,10 +229,7 @@ const Cart = () => {
                   >
                     {selectedItems[idx] && <Text style={styles.checkboxText}>✓</Text>}
                   </TouchableOpacity>
-                  <Image
-                    source={{ uri: imgUrl }}
-                    style={styles.image}
-                  />
+                  <Image source={{ uri: imgUrl }} style={styles.image} />
                   <View style={styles.info}>
                     <TouchableOpacity onPress={() => navigateToProductDetail(productId)}>
                       <Text style={styles.name} numberOfLines={2}>
@@ -201,7 +237,8 @@ const Cart = () => {
                       </Text>
                     </TouchableOpacity>
                     <Text style={styles.variant}>
-                      Màu: <Text style={styles.bold}>{item.productVariant?.color}</Text> | Size: <Text style={styles.bold}>{item.productVariant?.size}</Text>
+                      Màu: <Text style={styles.bold}>{item.productVariant?.color}</Text> | Size:{' '}
+                      <Text style={styles.bold}>{item.productVariant?.size}</Text>
                     </Text>
                     <View style={styles.rowBetween}>
                       <Text style={styles.price}>
@@ -239,6 +276,15 @@ const Cart = () => {
           </View>
         </ScrollView>
       )}
+      <CustomModal
+        isVisible={modalVisible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        onClose={() => setModalVisible(false)}
+        onConfirm={modalConfig.onConfirm}
+        showConfirmButton={modalConfig.showConfirmButton}
+      />
     </View>
   );
 };
@@ -247,7 +293,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#f7f7f8',
-    paddingTop: 8,
+    paddingTop: 40,
   },
   container: {
     flex: 1,
@@ -261,6 +307,18 @@ const styles = StyleSheet.create({
     marginLeft: 14,
     marginBottom: 10,
     marginTop: 14,
+  },
+  selectAllContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 18,
+    marginBottom: 10,
+  },
+  selectAllText: {
+    fontSize: 16,
+    color: '#222',
+    fontWeight: '600',
+    marginLeft: 8,
   },
   card: {
     flexDirection: 'row',
@@ -276,7 +334,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   checkbox: {
-    marginRight: 10,
     width: 24,
     height: 24,
     borderWidth: 2,
@@ -318,7 +375,7 @@ const styles = StyleSheet.create({
   },
   bold: { fontWeight: '700', color: '#111' },
   price: {
-    fontSize: 16 ,
+    fontSize: 16,
     color: '#ee4d2d',
     fontWeight: '700',
     marginBottom: 0,

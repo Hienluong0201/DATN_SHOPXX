@@ -9,12 +9,12 @@ import {
   TouchableOpacity,
   View,
   RefreshControl,
-  Alert,
 } from 'react-native';
 import { useAuth } from '../../store/useAuth';
 import AxiosInstance from '../../axiosInstance/AxiosInstance';
-import { Ionicons } from '@expo/vector-icons'; 
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
+import CustomModal from '../components/CustomModal';
 
 const Wishlist = () => {
   const { user } = useAuth();
@@ -22,13 +22,26 @@ const Wishlist = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalConfig, setModalConfig] = useState({
+    type: 'success' as 'success' | 'error' | 'warning',
+    title: '',
+    message: '',
+    showConfirmButton: false,
+    onConfirm: () => {},
+  });
 
-   useFocusEffect(
-    React.useCallback(() => {
-      fetchWishlist(); // mỗi lần vào lại tab/trang là fetch lại liền
-    }, [user])
-  );
-  // Hàm lấy danh sách yêu thích từ API
+  const showModal = (
+    type: 'success' | 'error' | 'warning',
+    title: string,
+    message: string,
+    showConfirmButton = false,
+    onConfirm = () => {}
+  ) => {
+    setModalConfig({ type, title, message, showConfirmButton, onConfirm });
+    setModalVisible(true);
+  };
+
   const fetchWishlist = async () => {
     if (!user?._id) {
       console.log('User ID không tồn tại:', user);
@@ -59,7 +72,7 @@ const Wishlist = () => {
             Name: item.productID.name,
             Image: imageURLs[0],
             Price: item.productID.price,
-            Description: item.productID.description || '', // Thêm mô tả
+            Description: item.productID.description || '',
           };
         })
       );
@@ -77,25 +90,30 @@ const Wishlist = () => {
     }
   };
 
-  // Hàm xóa sản phẩm khỏi danh sách yêu thích
   const removeFromWishlist = async (wishlistId: string) => {
-  try {
-    await AxiosInstance().delete(`/wishlist/${wishlistId}`);
-    setWishlist(wishlist.filter((item) => item.WishlistID !== wishlistId));
-    Alert.alert('Thành công', 'Đã xóa sản phẩm khỏi danh sách yêu thích.');
-  } catch (err) {
-    console.error('Lỗi khi xóa yêu thích:', err);
-    Alert.alert('Lỗi', 'Không thể xóa sản phẩm khỏi danh sách yêu thích.');
-  }
-};
+    showModal(
+      'warning',
+      'Xác nhận',
+      'Bạn muốn xóa sản phẩm này khỏi danh sách yêu thích?',
+      true,
+      async () => {
+        try {
+          await AxiosInstance().delete(`/wishlist/${wishlistId}`);
+          setWishlist(wishlist.filter((item) => item.WishlistID !== wishlistId));
+          showModal('success', 'Thành công', 'Đã xóa sản phẩm khỏi danh sách yêu thích.');
+        } catch (err) {
+          console.error('Lỗi khi xóa yêu thích:', err);
+          showModal('error', 'Lỗi', 'Không thể xóa sản phẩm khỏi danh sách yêu thích.');
+        }
+      }
+    );
+  };
 
-  // Gọi API khi component mount hoặc user thay đổi
   useEffect(() => {
     console.log('User hiện tại:', user);
     fetchWishlist();
   }, [user]);
 
-  // Hàm xử lý pull-to-refresh
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchWishlist();
@@ -163,77 +181,92 @@ const Wishlist = () => {
               <Text style={styles.price}>{item.Price.toLocaleString('vi-VN')}đ</Text>
             </View>
             <TouchableOpacity
-                  style={styles.removeButton}
-                  onPress={() => removeFromWishlist(item.WishlistID)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="trash-outline" size={20} color="#fff" />
-                </TouchableOpacity>
-
+              style={styles.removeButton}
+              onPress={() => removeFromWishlist(item.WishlistID)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash-outline" size={20} color="#fff" />
+            </TouchableOpacity>
           </TouchableOpacity>
         ))
       )}
+      <CustomModal
+        isVisible={modalVisible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        onClose={() => setModalVisible(false)}
+        onConfirm={modalConfig.onConfirm}
+        showConfirmButton={modalConfig.showConfirmButton}
+      />
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   loadingContainer: {
-  flex: 1,
-  justifyContent: 'center',
-  alignItems: 'center',
-  backgroundColor: '#f5f5f5', // cùng màu với container
-},
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc', // Màu nền nhẹ nhàng, hiện đại
+  },
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8fafc', // Màu nền sáng, sạch sẽ
+    marginTop: 40,
   },
   scrollContent: {
-    padding: 15,
-    paddingBottom: 20,
+    padding: 20, // Tăng padding để giao diện thoáng hơn
+    paddingBottom: 30,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 15,
+    fontSize: 32, // Tăng kích thước tiêu đề
+    fontWeight: '700',
+    color: '#1e293b', // Màu xanh đậm hiện đại
+    marginBottom: 20,
     textAlign: 'center',
+    letterSpacing: 0.5, // Thêm khoảng cách chữ cho tinh tế
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 50,
+    paddingVertical: 80, // Tăng không gian cho phần trống
   },
   emptyText: {
-    fontSize: 18,
-    color: '#666',
+    fontSize: 20,
+    fontWeight: '500',
+    color: '#475569', // Màu xám đậm nhẹ
     textAlign: 'center',
-    marginTop: 10,
+    marginTop: 15,
   },
   emptySubText: {
-    fontSize: 14,
-    color: '#999',
+    fontSize: 16,
+    color: '#94a3b8', // Màu xám nhạt
     textAlign: 'center',
-    marginTop: 5,
+    marginTop: 8,
   },
   card: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 15,
-    padding: 10,
-    elevation: 4,
+    backgroundColor: '#ffffff',
+    borderRadius: 16, // Bo góc mềm mại hơn
+    marginBottom: 20,
+    padding: 12,
+    elevation: 6, // Tăng đổ bóng cho nổi bật
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    borderWidth: 1, // Thêm viền nhẹ
+    borderColor: '#e2e8f0', // Viền xám nhạt
   },
   image: {
-    width: 100,
-    height: 100,
-    borderRadius: 10,
-    backgroundColor: '#eee', // Màu nền khi hình ảnh đang tải
+    width: 110, // Tăng kích thước hình ảnh
+    height: 110,
+    borderRadius: 12, // Bo góc hình ảnh
+    backgroundColor: '#f1f5f9', // Màu nền khi hình ảnh đang tải
+    borderWidth: 1,
+    borderColor: '#e2e8f0', // Viền nhẹ cho hình ảnh
   },
   info: {
     flex: 1,
@@ -241,37 +274,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   name: {
-    fontSize: 16,
+    fontSize: 18, // Tăng kích thước tên sản phẩm
     fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 5,
+    color: '#1e293b', // Màu chữ đậm
+    marginBottom: 6,
   },
   description: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 5,
+    color: '#64748b', // Màu xám trung tính
+    marginBottom: 8,
+    lineHeight: 20, // Tăng khoảng cách dòng cho dễ đọc
   },
   price: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#c0392b',
+    color: '#dc2626', // Màu đỏ tươi sáng hơn
   },
   removeButton: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: '#c0392b',
-    borderRadius: 15,
-    padding: 8,
+    top: 12,
+    right: 12,
+    backgroundColor: '#ef4444', // Màu đỏ nổi bật hơn
+    borderRadius: 20,
+    padding: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 3, // Thêm đổ bóng cho nút
   },
   errorText: {
-    fontSize: 16,
-    color: '#c0392b',
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#dc2626', // Màu đỏ lỗi
     textAlign: 'center',
-    marginTop: 20,
+    marginTop: 30,
   },
 });
-
 export default Wishlist;
