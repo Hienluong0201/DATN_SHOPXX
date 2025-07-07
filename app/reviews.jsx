@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
 import { useAuth } from '../store/useAuth';
+import { io } from 'socket.io-client';   // 👉 import socket
 
 const ChatWithShop = () => {
   const { user } = useAuth();
@@ -13,8 +14,9 @@ const ChatWithShop = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const flatListRef = useRef(null);
+  const socketRef = useRef(null);
 
-  // Fetch messages function (giữ nguyên)
+  // Fetch once when mount
   const fetchMessages = async () => {
     if (!userID) return;
     setLoading(true);
@@ -36,6 +38,9 @@ const ChatWithShop = () => {
         }))
       );
       setError(null);
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     } catch (err) {
       console.error('Lỗi lấy tin nhắn:', err.message);
       setError('Không thể tải tin nhắn. Vui lòng thử lại sau.');
@@ -45,18 +50,15 @@ const ChatWithShop = () => {
     }
   };
 
-  // Send message function (giữ nguyên)
+  // Send message
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !userID) return;
     const payload = { userID, sender: 'user', text: newMessage };
     setLoading(true);
     try {
-      const response = await AxiosInstance().post('/messages', payload);
-      await fetchMessages();
+      await AxiosInstance().post('/messages', payload);
       setNewMessage('');
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      // Không cần fetch lại — sẽ nhận socket realtime
     } catch (err) {
       console.error('Lỗi gửi tin nhắn:', err.message);
       setError('Không gửi được tin nhắn. Vui lòng thử lại.');
@@ -66,14 +68,49 @@ const ChatWithShop = () => {
     }
   };
 
-  // === POLLING, đặt ở đây ===
+  // Socket setup
   useEffect(() => {
     if (!userID) return;
-    fetchMessages();
-    const interval = setInterval(fetchMessages, 2000); // 2 giây gọi lại 1 lần
-    return () => clearInterval(interval);
+
+    fetchMessages(); // load tin nhắn ban đầu
+
+    const socket = io("https://datn-sever.onrender.com"); // 👉 thay IP thật
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      console.log("✅ Socket connected", socket.id);
+    });
+
+    socket.on("new_message", (msg) => {
+      console.log("📥 nhận realtime", msg);
+
+      // lọc đúng userID
+      if (msg.userID === userID) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: msg._id,
+            sender: msg.sender,
+            text: msg.text,
+            timestamp: new Date(msg.timestamp).toLocaleString('vi-VN', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          }
+        ]);
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, [userID]);
-  // ===========================
 
   const goBack = () => {
     router.back();
@@ -129,7 +166,7 @@ const ChatWithShop = () => {
           />
         )}
 
-        <View style={[styles.inputContainer, ]}>
+        <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
             placeholder="Nhập tin nhắn..."
@@ -142,13 +179,13 @@ const ChatWithShop = () => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-      <View style={{height: 100}} />
+      <View style={{ height: 100 }} />
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f6fa', marginTop : 20, },
+  container: { flex: 1, backgroundColor: '#f5f6fa', marginTop: 20 },
   keyboardContainer: { flex: 1 },
   header: {
     flexDirection: 'row',
@@ -178,7 +215,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#eee',
   },
-  
   input: {
     flex: 1,
     borderWidth: 1,
