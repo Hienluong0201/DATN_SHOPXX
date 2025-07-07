@@ -1,12 +1,22 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, TextInput, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  TextInput,
+} from 'react-native';
 import { useLocalSearchParams, useFocusEffect, router } from 'expo-router';
 import { useProducts } from '../store/useProducts';
 import { useAuth } from '../store/useAuth';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
-import { Ionicons } from '@expo/vector-icons';  
+import { Ionicons } from '@expo/vector-icons';
 import RenderHtml from 'react-native-render-html';
 import { useWindowDimensions } from 'react-native';
+import CustomModal from './components/CustomModal'; // Import CustomModal (đảm bảo đường dẫn đúng)
 
 // Hàm gọi API thêm vào giỏ hàng
 const addToCartAPI = async (userID, productVariant, soluong) => {
@@ -51,11 +61,39 @@ const ProductDetail = () => {
   const { user } = useAuth();
   const [reviews, setReviews] = useState([]);
   const [reviewTab, setReviewTab] = useState(0);
-  const { width } = useWindowDimensions();  
+  const { width } = useWindowDimensions();
   // Review form state
   const [reviewComment, setReviewComment] = useState('');
   const [reviewRating, setReviewRating] = useState(5);
   const [sendingReview, setSendingReview] = useState(false);
+
+  // State để quản lý CustomModal
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalConfig, setModalConfig] = useState({
+    type: 'success' as 'success' | 'error' | 'warning',
+    title: '',
+    message: '',
+    showConfirmButton: false,
+    onConfirm: () => {},
+  });
+
+  // Hàm hiển thị modal
+  const showModal = (
+    type: 'success' | 'error' | 'warning',
+    title: string,
+    message: string,
+    showConfirmButton = false,
+    onConfirm?: () => void
+  ) => {
+    setModalConfig({
+      type,
+      title,
+      message,
+      showConfirmButton,
+      onConfirm: onConfirm || (() => {}),
+    });
+    setModalVisible(true);
+  };
 
   // Lấy dữ liệu sản phẩm, biến thể, review
   const loadData = useCallback(async () => {
@@ -114,48 +152,54 @@ const ProductDetail = () => {
   // Xử lý thêm vào giỏ hàng
   const handleAddToCart = useCallback(async () => {
     if (!user || !user._id) {
-      Alert.alert('Thông báo', 'Bạn cần đăng nhập để mua ngay!');
+      showModal('warning', 'Thông báo', 'Bạn cần đăng nhập để thêm vào giỏ hàng!');
       return;
     }
     if (product && selectedVariant) {
       try {
         await addToCartAPI(user._id, selectedVariant._id, quantity);
-       Alert.alert('Thông báo', 'Đã thên sản phẩm vào giỏ hàng Wao wao');
+        showModal('success', 'Thành công', 'Đã thêm sản phẩm vào giỏ hàng!');
       } catch (error) {
-        alert(error?.message || 'Có lỗi xảy ra khi thêm vào giỏ hàng.');
+        showModal('error', 'Lỗi', error?.message || 'Có lỗi xảy ra khi thêm vào giỏ hàng.');
       }
     } else {
-     Alert.alert('Thông báo', 'Vui lòng chọn màu và size');
+      showModal('warning', 'Thông báo', 'Vui lòng chọn màu và kích thước!');
     }
   }, [product, selectedVariant, quantity, user]);
 
   // Mua ngay
-const handleBuyNow = useCallback(async () => {
-  if (!user || !user._id) {
-    Alert.alert('Thông báo', 'Bạn cần đăng nhập để mua ngay!');
-    return;
-  }
-  if (product && selectedVariant) {
-    try {
-      await addToCartAPI(user._id, selectedVariant._id, quantity);
-      // Chuyển qua trang giỏ hàng ngay sau khi thêm xong
-      router.push('/home/cart');
-    } catch (error) {
-      alert(error?.message || 'Có lỗi xảy ra khi thêm vào giỏ hàng.');
+  const handleBuyNow = useCallback(async () => {
+    if (!user || !user._id) {
+      showModal('warning', 'Thông báo', 'Bạn cần đăng nhập để mua ngay!');
+      return;
     }
-  } else {
-    alert('Vui lòng chọn biến thể trước khi mua.');
-  }
-}, [product, selectedVariant, quantity, user]);
+    if (product && selectedVariant) {
+      try {
+        await addToCartAPI(user._id, selectedVariant._id, quantity);
+        showModal('success', 'Thành công', 'Đã thêm vào giỏ hàng, chuyển đến giỏ hàng...', false, () => {
+          router.push('/home/cart');
+        });
+        // Tự động chuyển sau 1 giây
+        setTimeout(() => {
+          setModalVisible(false);
+          router.push('/home/cart');
+        }, 1000);
+      } catch (error) {
+        showModal('error', 'Lỗi', error?.message || 'Có lỗi xảy ra khi thêm vào giỏ hàng.');
+      }
+    } else {
+      showModal('warning', 'Thông báo', 'Vui lòng chọn màu và kích thước!');
+    }
+  }, [product, selectedVariant, quantity, user]);
 
   // Gửi review
   const handleSendReview = async () => {
     if (!user || !user._id) {
-      Alert.alert('Bạn cần đăng nhập để đánh giá!');
+      showModal('warning', 'Thông báo', 'Bạn cần đăng nhập để đánh giá!');
       return;
     }
     if (!reviewComment.trim()) {
-      Alert.alert('Vui lòng nhập nội dung đánh giá!');
+      showModal('warning', 'Thông báo', 'Vui lòng nhập nội dung đánh giá!');
       return;
     }
     setSendingReview(true);
@@ -166,12 +210,12 @@ const handleBuyNow = useCallback(async () => {
         rating: reviewRating,
         comment: reviewComment.trim(),
       });
-      Alert.alert('Thành công', 'Đánh giá đã gửi thành công <3 <3');
+      showModal('success', 'Thành công', 'Đánh giá đã gửi thành công!');
       setReviewComment('');
       setReviewRating(5);
       reloadReview();
     } catch (err) {
-      Alert.alert('Lỗi', err?.message || 'Không gửi được đánh giá');
+      showModal('error', 'Lỗi', err?.message || 'Không gửi được đánh giá.');
     }
     setSendingReview(false);
   };
@@ -202,7 +246,28 @@ const handleBuyNow = useCallback(async () => {
           <View style={styles.details}>
             <Text style={styles.name}>{product.Name}</Text>
             <Text style={styles.price}>{product.Price} VNĐ</Text>
-            <Text style={styles.description}>{product.Description || 'Không có mô tả'}</Text>
+            <View style={{ minHeight: 40, marginBottom: 15 }}>
+              <RenderHtml
+                contentWidth={width - 30}
+                source={{ html: product.Description || '<i>Không có mô tả</i>' }}
+                tagsStyles={{
+                  p: { color: '#666', fontSize: 14, marginBottom: 6 },
+                  h1: { fontSize: 20, fontWeight: '700', marginBottom: 8, color: '#222' },
+                  h2: { fontSize: 18, fontWeight: '700', marginBottom: 6, color: '#222' },
+                  h3: { fontSize: 16, fontWeight: '600', marginBottom: 5, color: '#333' },
+                  ul: { marginBottom: 6 },
+                  li: { color: '#666', fontSize: 14 },
+                  strong: { fontWeight: 'bold', color: '#333' },
+                  em: { fontStyle: 'italic', color: '#666' },
+                  a: { color: '#3498db', textDecorationLine: 'underline' },
+                }}
+                defaultTextProps={{
+                  selectable: true,
+                  numberOfLines: undefined,
+                  ellipsizeMode: 'tail',
+                }}
+              />
+            </View>
             <Text style={styles.discontinuedText}>Sản phẩm đã ngừng kinh doanh</Text>
           </View>
         </ScrollView>
@@ -217,84 +282,80 @@ const handleBuyNow = useCallback(async () => {
 
   return (
     <View style={styles.container}>
-    <ScrollView
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingBottom: 70 }}
-    >
-      {/* Ảnh sản phẩm */}
-      <Image source={{ uri: product.Image }} style={styles.image} />
-      <View style={styles.details}>
-        <Text style={styles.name}>{product.Name}</Text>
-        <View style={styles.priceContainer}>
-          <Text style={styles.price}>{product.Price} VNĐ</Text>
-          <View style={styles.ratingContainer}>
-            {[1, 2, 3, 4, 5].map(i => (
-              <Ionicons
-                key={i}
-                name={
-                  product.Rating >= i
-                    ? 'star'
-                    : product.Rating >= i - 0.5
-                    ? 'star-half'
-                    : 'star-outline'
-                }
-                size={16}
-                color="#FFD700"
-                style={{ marginRight: 1 }}
-              />
-            ))}
-            <Text style={styles.ratingText}>
-              {` ${product.Rating ? product.Rating.toFixed(1) : '0.0'} (${totalReview} đánh giá)`}
-            </Text>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 70 }}
+      >
+        {/* Ảnh sản phẩm */}
+        <Image source={{ uri: product.Image }} style={styles.image} />
+        <View style={styles.details}>
+          <Text style={styles.name}>{product.Name}</Text>
+          <View style={styles.priceContainer}>
+            <Text style={styles.price}>{product.Price} VNĐ</Text>
+            <View style={styles.ratingContainer}>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Ionicons
+                  key={i}
+                  name={
+                    product.Rating >= i
+                      ? 'star'
+                      : product.Rating >= i - 0.5
+                      ? 'star-half'
+                      : 'star-outline'
+                  }
+                  size={16}
+                  color="#FFD700"
+                  style={{ marginRight: 1 }}
+                />
+              ))}
+              <Text style={styles.ratingText}>
+                {` ${product.Rating ? product.Rating.toFixed(1) : '0.0'} (${totalReview} đánh giá)`}
+              </Text>
+            </View>
           </View>
-        </View>
 
-        {/* Thay vì <Text style={styles.description}>{product.Description || 'Không có mô tả'}</Text> */}
-        <View style={{ minHeight: 40, marginBottom: 15 }}>
-          <RenderHtml
-            contentWidth={width - 30} // padding 15 mỗi bên
-            source={{ html: product.Description || '<i>Không có mô tả</i>' }}
-            tagsStyles={{
-              p: { color: '#666', fontSize: 14, marginBottom: 6 },
-              h1: { fontSize: 20, fontWeight: '700', marginBottom: 8, color: '#222' },
-              h2: { fontSize: 18, fontWeight: '700', marginBottom: 6, color: '#222' },
-              h3: { fontSize: 16, fontWeight: '600', marginBottom: 5, color: '#333' },
-              ul: { marginBottom: 6 },
-              li: { color: '#666', fontSize: 14 },
-              strong: { fontWeight: 'bold', color: '#333' },
-              em: { fontStyle: 'italic', color: '#666' },
-              a: { color: '#3498db', textDecorationLine: 'underline' },
-            }}
-            defaultTextProps={{
-              selectable: true,
-              numberOfLines: undefined,
-              ellipsizeMode: 'tail',
-            }}
-          />
-        </View>
-
-        <Text style={styles.section}>Màu sắc</Text>
-        <View style={styles.variantRow}>
-          {colors.map((color) => (
-            <TouchableOpacity
-              key={color}
-              style={[
-                styles.variantButton,
-                selectedVariant?.color === color
-                  ? styles.selectedVariantButton
-                  : null,
-              ]}
-              onPress={() => {
-                const variant = variants.find((v) => v.color === color);
-                setSelectedVariant(variant);
+          <View style={{ minHeight: 40, marginBottom: 15 }}>
+            <RenderHtml
+              contentWidth={width - 30}
+              source={{ html: product.Description || '<i>Không có mô tả</i>' }}
+              tagsStyles={{
+                p: { color: '#666', fontSize: 14, marginBottom: 6 },
+                h1: { fontSize: 20, fontWeight: '700', marginBottom: 8, color: '#222' },
+                h2: { fontSize: 18, fontWeight: '700', marginBottom: 6, color: '#222' },
+                h3: { fontSize: 16, fontWeight: '600', marginBottom: 5, color: '#333' },
+                ul: { marginBottom: 6 },
+                li: { color: '#666', fontSize: 14 },
+                strong: { fontWeight: 'bold', color: '#333' },
+                em: { fontStyle: 'italic', color: '#666' },
+                a: { color: '#3498db', textDecorationLine: 'underline' },
               }}
-            >
-              <Text style={styles.variantButtonText}>{color}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        {selectedVariant &&
-          sizesByColor(selectedVariant.color).length > 0 && (
+              defaultTextProps={{
+                selectable: true,
+                numberOfLines: undefined,
+                ellipsizeMode: 'tail',
+              }}
+            />
+          </View>
+
+          <Text style={styles.section}>Màu sắc</Text>
+          <View style={styles.variantRow}>
+            {colors.map((color) => (
+              <TouchableOpacity
+                key={color}
+                style={[
+                  styles.variantButton,
+                  selectedVariant?.color === color ? styles.selectedVariantButton : null,
+                ]}
+                onPress={() => {
+                  const variant = variants.find((v) => v.color === color);
+                  setSelectedVariant(variant);
+                }}
+              >
+                <Text style={styles.variantButtonText}>{color}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {selectedVariant && sizesByColor(selectedVariant.color).length > 0 && (
             <>
               <Text style={styles.section}>Kích thước</Text>
               <View style={styles.variantRow}>
@@ -303,15 +364,11 @@ const handleBuyNow = useCallback(async () => {
                     key={size}
                     style={[
                       styles.variantButton,
-                      selectedVariant?.size === size
-                        ? styles.selectedVariantButton
-                        : null,
+                      selectedVariant?.size === size ? styles.selectedVariantButton : null,
                     ]}
                     onPress={() => {
                       const variant = variants.find(
-                        (v) =>
-                          v.color === selectedVariant.color &&
-                          v.size === size
+                        (v) => v.color === selectedVariant.color && v.size === size
                       );
                       setSelectedVariant(variant);
                     }}
@@ -322,113 +379,126 @@ const handleBuyNow = useCallback(async () => {
               </View>
             </>
           )}
-        {selectedVariant && (
-          <>
-            <Text style={styles.section}>Số lượng</Text>
-            <View style={styles.quantityContainer}>
-              <TouchableOpacity
-                style={styles.quantityButton}
-                onPress={() => setQuantity((prev) => Math.max(1, prev - 1))}
-                disabled={quantity <= 1}
-              >
-                <Text style={styles.quantityButtonText}>-</Text>
-              </TouchableOpacity>
-              <TextInput
-                style={styles.quantityInput}
-                value={quantity.toString()}
-                keyboardType="numeric"
-                onChangeText={(text) => {
-                  const num = parseInt(text) || 1;
-                  if (num <= (selectedVariant?.stock || 1)) setQuantity(num);
-                }}
-              />
-              <TouchableOpacity
-                style={styles.quantityButton}
-                onPress={() =>
-                  setQuantity((prev) =>
-                    prev < (selectedVariant?.stock || 1) ? prev + 1 : prev
-                  )
-                }
-                disabled={quantity >= (selectedVariant?.stock || 1)}
-              >
-                <Text style={styles.quantityButtonText}>+</Text>
-              </TouchableOpacity>
-              <Text style={styles.stockText}>Tồn kho: {selectedVariant?.stock || 0}</Text>
-            </View>
-          </>
-        )}
+          {selectedVariant && (
+            <>
+              <Text style={styles.section}>Số lượng</Text>
+              <View style={styles.quantityContainer}>
+                <TouchableOpacity
+                  style={styles.quantityButton}
+                  onPress={() => setQuantity((prev) => Math.max(1, prev - 1))}
+                  disabled={quantity <= 1}
+                >
+                  <Text style={styles.quantityButtonText}>-</Text>
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.quantityInput}
+                  value={quantity.toString()}
+                  keyboardType="numeric"
+                  onChangeText={(text) => {
+                    const num = parseInt(text) || 1;
+                    if (num <= (selectedVariant?.stock || 1)) setQuantity(num);
+                  }}
+                />
+                <TouchableOpacity
+                  style={styles.quantityButton}
+                  onPress={() =>
+                    setQuantity((prev) =>
+                      prev < (selectedVariant?.stock || 1) ? prev + 1 : prev
+                    )
+                  }
+                  disabled={quantity >= (selectedVariant?.stock || 1)}
+                >
+                  <Text style={styles.quantityButtonText}>+</Text>
+                </TouchableOpacity>
+                <Text style={styles.stockText}>
+                  Tồn kho: {selectedVariant?.stock || 0}
+                </Text>
+              </View>
+            </>
+          )}
 
-     
-
-        {/* Tabs + List review */}
-        <Text style={[styles.section, { marginTop: 28 }]}>Đánh giá sản phẩm</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
-          {reviewTabs.map((tab) => (
-            <TouchableOpacity
-              key={tab.value}
-              style={[
-                styles.reviewTabButton,
-                reviewTab === tab.value && styles.activeReviewTab,
-              ]}
-              onPress={() => setReviewTab(tab.value)}
-            >
-              <Text
+          {/* Tabs + List review */}
+          <Text style={[styles.section, { marginTop: 28 }]}>Đánh giá sản phẩm</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+            {reviewTabs.map((tab) => (
+              <TouchableOpacity
+                key={tab.value}
                 style={[
-                  styles.reviewTabText,
-                  reviewTab === tab.value && { color: '#ee4d2d', fontWeight: 'bold' },
+                  styles.reviewTabButton,
+                  reviewTab === tab.value && styles.activeReviewTab,
                 ]}
+                onPress={() => setReviewTab(tab.value)}
               >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-        {filteredReviews.length === 0 ? (
-          <Text style={{ color: '#666', fontStyle: 'italic' }}>Chưa có đánh giá nào cho sản phẩm này.</Text>
-        ) : (
-          filteredReviews.map((rv) => (
-            <View key={rv._id} style={styles.reviewCard}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="person-circle" size={28} color="#bbb" />
-                <Text style={{ marginLeft: 5, fontWeight: '600', color: '#333' }}>
-                  {rv.userID?.name || 'Người dùng'}
+                <Text
+                  style={[
+                    styles.reviewTabText,
+                    reviewTab === tab.value && { color: '#ee4d2d', fontWeight: 'bold' },
+                  ]}
+                >
+                  {tab.label}
                 </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          {filteredReviews.length === 0 ? (
+            <Text style={{ color: '#666', fontStyle: 'italic' }}>
+              Chưa có đánh giá nào cho sản phẩm này.
+            </Text>
+          ) : (
+            filteredReviews.map((rv) => (
+              <View key={rv._id} style={styles.reviewCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="person-circle" size={28} color="#bbb" />
+                  <Text style={{ marginLeft: 5, fontWeight: '600', color: '#333' }}>
+                    {rv.userID?.name || 'Người dùng'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 2 }}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Ionicons
+                      key={star}
+                      name={star <= rv.rating ? 'star' : 'star-outline'}
+                      size={15}
+                      color="#FFD700"
+                    />
+                  ))}
+                  <Text style={{ fontSize: 12, color: '#888', marginLeft: 10 }}>
+                    {new Date(rv.reviewDate || rv.createdAt).toLocaleDateString()}
+                  </Text>
+                </View>
+                <Text style={{ color: '#222', marginTop: 2 }}>{rv.comment}</Text>
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 2 }}>
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <Ionicons
-                    key={star}
-                    name={star <= rv.rating ? 'star' : 'star-outline'}
-                    size={15}
-                    color="#FFD700"
-                  />
-                ))}
-                <Text style={{ fontSize: 12, color: '#888', marginLeft: 10 }}>
-                  {new Date(rv.reviewDate || rv.createdAt).toLocaleDateString()}
-                </Text>
-              </View>
-              <Text style={{ color: '#222', marginTop: 2 }}>{rv.comment}</Text>
-            </View>
-          ))
-        )}
-      </View>
-    </ScrollView>
-    {variants.length > 0 && (
-      <View style={styles.actionContainer}>
-        <TouchableOpacity style={styles.addToCartButton} onPress={handleAddToCart}>
-          <Text style={styles.buttonText}>Thêm vào giỏ</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.buyNowButton} onPress={handleBuyNow}>
-          <Text style={styles.buttonText}>Mua ngay</Text>
-        </TouchableOpacity>
-      </View>
-    )}
-  </View>
-);
+            ))
+          )}
+        </View>
+      </ScrollView>
+      {variants.length > 0 && (
+        <View style={styles.actionContainer}>
+          <TouchableOpacity style={styles.addToCartButton} onPress={handleAddToCart}>
+            <Text style={styles.buttonText}>Thêm vào giỏ</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.buyNowButton} onPress={handleBuyNow}>
+            <Text style={styles.buttonText}>Mua ngay</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Thêm CustomModal */}
+      <CustomModal
+        isVisible={modalVisible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        onClose={() => setModalVisible(false)}
+        onConfirm={modalConfig.onConfirm}
+        showConfirmButton={modalConfig.showConfirmButton}
+      />
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff',marginTop : 40 },
+  container: { flex: 1, backgroundColor: '#fff', marginTop: 40 },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -442,7 +512,6 @@ const styles = StyleSheet.create({
   price: { fontSize: 24, fontWeight: '700', color: '#ee4d2d' },
   ratingContainer: { flexDirection: 'row', alignItems: 'center' },
   ratingText: { fontSize: 14, color: '#666', marginLeft: 5 },
-  description: { fontSize: 14, color: '#666', marginBottom: 15 },
   section: { fontSize: 16, fontWeight: '600', color: '#1a1a1a', marginTop: 10, marginBottom: 5 },
   variantRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 10 },
   variantButton: {
@@ -507,36 +576,6 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: 16, color: '#666', textAlign: 'center', marginTop: 10 },
   errorText: { fontSize: 16, color: '#ee4d2d', textAlign: 'center', marginTop: 20 },
   discontinuedText: { fontSize: 16, color: '#ee4d2d', textAlign: 'center', marginTop: 20, fontWeight: '600' },
-
-  // Review styles
-  reviewInputContainer: {
-    backgroundColor: '#faf8f7',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    marginTop: 5,
-    borderWidth: 1,
-    borderColor: '#f3d5ca',
-  },
-  reviewInput: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 10,
-    minHeight: 45,
-    fontSize: 15,
-    marginBottom: 8,
-  },
-  sendReviewBtn: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#ee4d2d',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginTop: 4,
-  },
-  sendReviewText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   reviewTabButton: {
     borderWidth: 1,
     borderColor: '#eee',
