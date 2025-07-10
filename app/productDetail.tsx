@@ -107,6 +107,7 @@ const ProductDetail = () => {
       let reviewData = [];
       try {
         reviewData = await AxiosInstance().get(`/review/product/${productId}`);
+        console.log("du lieu anh " , reviewData)
         setReviews(reviewData || []);
       } catch (err) {
         setReviews([]);
@@ -467,6 +468,27 @@ const ProductDetail = () => {
                   </Text>
                 </View>
                 <Text style={{ color: '#222', marginTop: 2 }}>{rv.comment}</Text>
+                {Array.isArray(rv.images) && rv.images.length > 0 && (
+  <ScrollView
+    horizontal
+    showsHorizontalScrollIndicator={false}
+    style={{ marginTop: 10 }}
+  >
+    {rv.images.map((img, idx) => (
+      <Image
+        key={idx}
+        source={{ uri: img }}
+        style={{
+          width: 80,
+          height: 80,
+          borderRadius: 8,
+          marginRight: 8,
+          backgroundColor: '#eee',
+        }}
+      />
+    ))}
+  </ScrollView>
+)}
               </View>
             ))
           )}

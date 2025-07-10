@@ -1,4 +1,4 @@
-package com.hienluong2002.Xshop
+package com.hienluong2002.xshop;
 
 import android.os.Build
 import android.os.Bundle

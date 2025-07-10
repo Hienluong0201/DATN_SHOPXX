@@ -86,9 +86,9 @@ android {
 
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
-    namespace "com.hienluong2002.Xshop"
+    namespace "com.hienluong2002.xshop"
     defaultConfig {
-        applicationId "com.hienluong2002.Xshop"
+        applicationId "com.hienluong2002.xshop"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

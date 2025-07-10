@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
 import { useAuth } from '../store/useAuth';
-import { io } from 'socket.io-client';   // 👉 import socket
+import { io } from 'socket.io-client';   
 
 const ChatWithShop = () => {
   const { user } = useAuth();
