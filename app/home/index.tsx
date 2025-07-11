@@ -21,6 +21,7 @@ import AdvancedFilterModal from '../components/AdvancedFilterModal';
 import CustomModal from '../components/CustomModal';
 import { useFocusEffect } from 'expo-router';
 import AxiosInstance from '../../axiosInstance/AxiosInstance';
+import ProductVariantSelectorModal from '../components/ProductVariantSelectorModal';
 
 export default function HomeScreen() {
   const { user, loadUser, setUser } = useAuth();
@@ -35,6 +36,9 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [modalVisible, setModalVisible] = useState(false);
+  const [variantModalVisible, setVariantModalVisible] = useState(false);
+  const [currentProduct, setCurrentProduct] = useState<any>(null);
+  const [currentVariants, setCurrentVariants] = useState<any[]>([]);
   const [modalConfig, setModalConfig] = useState({
     type: 'success' as 'success' | 'error' | 'warning',
     title: '',
@@ -109,40 +113,43 @@ export default function HomeScreen() {
       console.error('Lỗi khi tải danh sách yêu thích:', err);
     }
   };
+const handleConfirmVariant = async (variantId: string) => {
+  if (!user?._id || !currentProduct) return;
 
-  const addToCartServer = async (product: any) => {
-    if (!user?._id) {
-      showModal('error', 'Lỗi', 'Vui lòng đăng nhập để thêm vào giỏ hàng!');
-      return;
-    }
+  try {
+    await AxiosInstance().post('/cart', {
+      userID: user._id,
+      productVariant: variantId,
+      soluong: 1,
+    });
+    showModal('success', 'Thành công', `${currentProduct.Name} đã được thêm vào giỏ hàng!`);
+  } catch (err: any) {
+    showModal('error', 'Lỗi', err?.response?.data?.message || 'Không thể thêm vào giỏ hàng.');
+  }
+};
+ const addToCartServer = async (product: any) => {
+  if (!user?._id) {
+    showModal('error', 'Lỗi', 'Vui lòng đăng nhập để thêm vào giỏ hàng!');
+    return;
+  }
 
-    let variants = [];
-    try {
-      variants = await fetchProductVariants(product.ProductID);
-    } catch (err) {
-      showModal('error', 'Lỗi', 'Không thể lấy biến thể sản phẩm!');
-      return;
-    }
+  let variants = [];
+  try {
+    variants = await fetchProductVariants(product.ProductID);
+  } catch {
+    showModal('error', 'Lỗi', 'Không thể lấy biến thể sản phẩm!');
+    return;
+  }
 
-    if (!variants || variants.length === 0) {
-      showModal('error', 'Lỗi', 'Sản phẩm này đã dừng kinh doanh!');
-      return;
-    }
+  if (!variants.length) {
+    showModal('error', 'Lỗi', 'Sản phẩm này đã dừng kinh doanh!');
+    return;
+  }
 
-    const variantId = variants[0]._id;
-
-    try {
-      await AxiosInstance().post('/cart', {
-        userID: user._id,
-        productVariant: variantId,
-        soluong: 1,
-      });
-      showModal('success', 'Thành công', `${product.Name} đã được thêm vào giỏ hàng!`);
-    } catch (err: any) {
-      showModal('error', 'Lỗi', err?.response?.data?.message || 'Không thể thêm vào giỏ hàng.');
-      console.log('Cart API error:', err?.response || err);
-    }
-  };
+  setCurrentProduct(product);
+  setCurrentVariants(variants);
+  setVariantModalVisible(true);
+};
 
   const handleToggleWishlist = (product: any) => {
     if (!user?._id) {
@@ -477,6 +484,14 @@ export default function HomeScreen() {
         message={modalConfig.message}
         onClose={() => setModalVisible(false)}
       />
+     <ProductVariantSelectorModal
+  visible={variantModalVisible}
+  onClose={() => setVariantModalVisible(false)}
+  onConfirm={handleConfirmVariant}
+  variants={currentVariants}
+  product={currentProduct} // <-- nhớ đảm bảo currentProduct không null khi mở modal
+/>
+
     </View>
   );
 }

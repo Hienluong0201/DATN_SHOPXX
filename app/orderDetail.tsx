@@ -7,10 +7,12 @@ import { useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
+import AxiosInstance1 from '../axiosInstance/AxiosInstances';
 import { useProducts } from '../store/useProducts';
 // Nếu bạn có hook user, thì import useAuth lấy user._id luôn cho chắc chắn:
 import { useAuth } from '../store/useAuth';
-
+import * as ImagePicker from 'expo-image-picker';
+import * as mime from 'react-native-mime-types'; 
 const PRIMARY = "#e4633b";
 const cancelReasonsList = [
   'Đặt nhầm sản phẩm',
@@ -61,6 +63,7 @@ const OrderDetail = () => {
   const [orderInfo, setOrderInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [reviewImages, setReviewImages] = useState([]);
 
   // Modal huỷ đơn
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
@@ -158,47 +161,72 @@ const OrderDetail = () => {
   };
 
   // Gửi review sản phẩm
-  const sendReviewAPI = async ({ userID, productID, rating, comment }) => {
-    try {
-      const res = await AxiosInstance().post('/review', {
-        userID,
-        productID,
-        rating,
-        comment,
-        status: 'true',
+const handleSendReview = async () => {
+  const userID = user?._id || orderInfo?.userID;
+
+  if (!userID || !reviewProduct) {
+    Alert.alert('Bạn cần đăng nhập!');
+    return;
+  }
+
+  if (!reviewComment.trim()) {
+    Alert.alert('Vui lòng nhập nội dung đánh giá!');
+    return;
+  }
+
+  setSendingReview(true);
+
+  try {
+    const formData = new FormData();
+    formData.append('userID', userID);
+    formData.append('productID', reviewProduct.variantID.productID);
+    formData.append('rating', String(reviewRating));
+    formData.append('comment', reviewComment.trim());
+    formData.append('status', 'true');
+
+    reviewImages.forEach((uri, index) => {
+      const filename = uri.split('/').pop() || `image_${index}.jpg`;
+      const ext = filename.split('.').pop()?.toLowerCase();
+      const mime = ext === 'jpg' || ext === 'jpeg'
+        ? 'image/jpeg'
+        : ext === 'png'
+        ? 'image/png'
+        : 'application/octet-stream';
+
+      formData.append('images', {
+        uri,
+        name: filename,
+        type: mime,
       });
-      return res.data;
-    } catch (error) {
-      const errorMsg = error?.response?.data?.message || error.message || 'Lỗi khi gửi đánh giá';
-      throw new Error(errorMsg);
+    });
+
+    const res = await fetch('https://datn-sever.onrender.com/review', {
+      method: 'POST',
+      body: formData,
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Lỗi không xác định');
     }
-  };
-  const handleSendReview = async () => {
-    // Dùng user._id (nếu bạn dùng useAuth), nếu không thì orderInfo.userID
-    const userID = user?._id || orderInfo?.userID;
-    if (!userID || !reviewProduct) {
-      Alert.alert('Bạn cần đăng nhập!');
-      return;
-    }
-    if (!reviewComment.trim()) {
-      Alert.alert('Vui lòng nhập nội dung đánh giá!');
-      return;
-    }
-    setSendingReview(true);
-    try {
-      await sendReviewAPI({
-        userID,
-        productID: reviewProduct.variantID.productID,
-        rating: reviewRating,
-        comment: reviewComment.trim(),
-      });
-      Alert.alert('Thành công', 'Đánh giá đã gửi thành công!');
-      setReviewModalVisible(false);
-    } catch (err) {
-      Alert.alert('Lỗi', err?.message || 'Không gửi được đánh giá');
-    }
-    setSendingReview(false);
-  };
+
+    Alert.alert('✅ Thành công', 'Đánh giá đã gửi thành công!');
+    setReviewModalVisible(false);
+    setReviewImages([]);
+    setReviewComment('');
+  } catch (err) {
+    console.error('❌ Lỗi gửi review:', err);
+    Alert.alert('Lỗi', err?.message || 'Không gửi được đánh giá');
+  }
+
+  setSendingReview(false);
+};
+
+
+
 
   const goBack = () => router.back();
   const calcTotal = () => orderDetails.reduce((sum, d) => sum + (d.price * d.quantity), 0);
@@ -458,6 +486,39 @@ const OrderDetail = () => {
               onChangeText={setReviewComment}
               multiline
             />
+            {/* Ảnh đã chọn + nút thêm ảnh */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, width: '100%' }}>
+                {reviewImages.map((uri, idx) => (
+                  <Image
+                    key={idx}
+                    source={{ uri }}
+                    style={{ width: 60, height: 60, marginRight: 8, marginBottom: 8, borderRadius: 8 }}
+                  />
+                ))}
+                <TouchableOpacity
+                  onPress={async () => {
+                    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                    if (!permission.granted) {
+                      Alert.alert("Quyền bị từ chối", "Ứng dụng cần quyền truy cập thư viện ảnh.");
+                      return;
+                    }
+                    const result = await ImagePicker.launchImageLibraryAsync({
+                      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                      allowsMultipleSelection: true,
+                      quality: 0.7,
+                    });
+                    if (!result.canceled) {
+                      setReviewImages(prev => [...prev, ...result.assets.map(asset => asset.uri)]);
+                    }
+                  }}
+                  style={{
+                    width: 60, height: 60, borderRadius: 8, backgroundColor: "#eee",
+                    alignItems: 'center', justifyContent: 'center'
+                  }}
+                >
+                  <Ionicons name="camera" size={24} color="#888" />
+                </TouchableOpacity>
+              </View>
             <View style={{ flexDirection: 'row', marginTop: 16, width: '100%' }}>
               <TouchableOpacity
                 style={{

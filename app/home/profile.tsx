@@ -3,10 +3,13 @@ import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView } from 'rea
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '../../store/useAuth'; // Import useAuth
+import { useNavigation } from '@react-navigation/native';
 
 const ProfileScreen = () => {
   const { user, loadUser } = useAuth(); // Lấy user và loadUser từ useAuth
 
+const navigation = useNavigation();
+  const { logout } = useAuth();
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -86,11 +89,24 @@ const ProfileScreen = () => {
           <Text style={styles.menuText}>Liên hệ</Text>
           <Ionicons name="chevron-forward" size={20} color="#8B5A2B" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('../login')}>
-          <MaterialIcons name="exit-to-app" size={24} color="#8B5A2B" />
-          <Text style={styles.menuText}>Đăng xuất</Text>
-          <Ionicons name="chevron-forward" size={20} color="#8B5A2B" />
-        </TouchableOpacity>
+       <TouchableOpacity
+          style={styles.menuItem}
+          onPress={async () => {
+            try {
+              await logout(); // 1. Xóa AsyncStorage và set user = null
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'login' }], // 2. Reset navigation stack
+              });
+            } catch (error) {
+              Alert.alert('Lỗi', 'Không thể đăng xuất. Vui lòng thử lại.');
+            }
+          }}
+        >
+  <MaterialIcons name="exit-to-app" size={24} color="#8B5A2B" />
+  <Text style={styles.menuText}>Đăng xuất</Text>
+  <Ionicons name="chevron-forward" size={20} color="#8B5A2B" />
+</TouchableOpacity>
       </View>
     </ScrollView>
   );

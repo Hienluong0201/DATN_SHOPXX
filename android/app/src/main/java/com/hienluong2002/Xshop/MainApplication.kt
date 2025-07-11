@@ -1,4 +1,5 @@
-package com.hienluong2002.Xshop
+package com.hienluong2002.xshop;
+
 
 import android.app.Application
 import android.content.res.Configuration
