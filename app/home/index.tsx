@@ -22,7 +22,7 @@ import CustomModal from '../components/CustomModal';
 import { useFocusEffect } from 'expo-router';
 import AxiosInstance from '../../axiosInstance/AxiosInstance';
 import ProductVariantSelectorModal from '../components/ProductVariantSelectorModal';
-
+import { Image as RNImage } from 'react-native';
 export default function HomeScreen() {
   const { user, loadUser, setUser } = useAuth();
   const { categories, products, fetchProducts, loading, error, fetchCategories, fetchWishlist, wishlist, addToWishlist, removeFromWishlist, isInWishlist, getWishlistId, fetchProductVariants } = useProducts();
@@ -51,18 +51,19 @@ export default function HomeScreen() {
   };
 
   useFocusEffect(
-    useCallback(() => {
-      const loadData = async () => {
-        await Promise.all([
-          fetchCategories(),
-          fetchProducts({ categoryId: 'all', page: 1, limit: 10 }),
-          loadFavorites(),
-          user?._id ? fetchWishlist(user._id) : Promise.resolve(),
-        ]);
-      };
-      loadData();
-    }, [user])
-  );
+  useCallback(() => {
+    const loadData = async () => {
+      await Promise.all([
+        fetchCategories(),
+        fetchProducts({ categoryId: 'all', page: 1, limit: 10 }), // ✅ CHỈ GỌI Ở ĐÂY
+        loadFavorites(),
+        user?._id ? fetchWishlist(user._id) : Promise.resolve(),
+      ]);
+    };
+    loadData();
+  }, [user])
+);
+
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -79,29 +80,29 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  useEffect(() => {
-    const initialize = async () => {
-      await loadUser();
-      await loadFavorites();
-      await fetchProducts({ categoryId: 'all', page: 1, limit: 10 });
+ useEffect(() => {
+  const initialize = async () => {
+    await loadUser();
+    await loadFavorites();
 
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 1200,
-        easing: Easing.ease,
-        useNativeDriver: true,
-      }).start();
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 1200,
+      easing: Easing.ease,
+      useNativeDriver: true,
+    }).start();
 
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 1000,
-        delay: 400,
-        easing: Easing.out(Easing.exp),
-        useNativeDriver: true,
-      }).start();
-    };
-    initialize();
-  }, []);
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 1000,
+      delay: 400,
+      easing: Easing.out(Easing.exp),
+      useNativeDriver: true,
+    }).start();
+  };
+  initialize();
+}, []);
+
 
   const loadFavorites = async () => {
     try {
@@ -127,7 +128,7 @@ const handleConfirmVariant = async (variantId: string) => {
     showModal('error', 'Lỗi', err?.response?.data?.message || 'Không thể thêm vào giỏ hàng.');
   }
 };
- const addToCartServer = async (product: any) => {
+const addToCartServer = async (product: any) => {
   if (!user?._id) {
     showModal('error', 'Lỗi', 'Vui lòng đăng nhập để thêm vào giỏ hàng!');
     return;
@@ -146,8 +147,26 @@ const handleConfirmVariant = async (variantId: string) => {
     return;
   }
 
-  setCurrentProduct(product);
+  const imageUrl = product.Image || product.image || product.images?.[0] || '';
+
+  // ✅ Prefetch ảnh trước khi mở modal
+  if (imageUrl) {
+    try {
+      await RNImage.prefetch(imageUrl); // tải trước
+      console.log('✅ Ảnh đã prefetch xong:', imageUrl);
+    } catch (e) {
+      console.warn('⚠️ Prefetch lỗi:', imageUrl);
+    }
+  }
+
+  setCurrentProduct({
+    Image: imageUrl || 'https://via.placeholder.com/100',
+    Name: product.Name || product.name || 'Không có tên',
+    Price: product.Price || product.price || '0',
+  });
+
   setCurrentVariants(variants);
+  // ✅ Sau khi set xong, mở modal
   setVariantModalVisible(true);
 };
 
@@ -397,6 +416,7 @@ const handleConfirmVariant = async (variantId: string) => {
             </View>
             <View style={styles.gridContainer}>
               {allProducts.map((product) => (
+
                 <TouchableOpacity
                   key={product.ProductID}
                   style={styles.productCard}

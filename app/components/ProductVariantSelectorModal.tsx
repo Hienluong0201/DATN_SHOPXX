@@ -33,9 +33,11 @@ const ProductVariantSelectorModal: React.FC<Props> = ({
 }) => {
   const [selectedColor, setSelectedColor] = React.useState<string | null>(null);
   const [selectedSize, setSelectedSize] = React.useState<string | null>(null);
-
+  const [imageError, setImageError] = React.useState(false);
   const colors = Array.from(new Set(variants.map(v => v.color)));
-
+React.useEffect(() => {
+  setImageError(false); // reset mỗi khi đổi sản phẩm
+}, [product?.Image]);
   const sizes = selectedColor
     ? Array.from(new Set(variants.filter(v => v.color === selectedColor).map(v => v.size)))
     : [];
@@ -63,7 +65,7 @@ const ProductVariantSelectorModal: React.FC<Props> = ({
   }, [visible]);
 
   if (!product) return null;
-
+  console.log('Product image URI:', product.Image);
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>

@@ -175,18 +175,23 @@ const removeFromWishlist = async (wishlistId) => {
     const fetchedProducts = await Promise.all(
       (productResponse.products || []).map(async (product) => {
         if (!product._id) return null;
+
+        // 🖼️ Load ảnh
         let imageURLs = ['https://via.placeholder.com/150'];
-        let rating = 5; 
         try {
           const imageResponse = await AxiosInstance().get(`/img?productID=${product._id}`);
-          imageURLs = imageResponse[0]?.imageURL || imageURLs;
-        } catch { }
+          const firstImageSet = imageResponse?.[0]?.imageURL;
+          if (Array.isArray(firstImageSet) && firstImageSet.length > 0) {
+            imageURLs = firstImageSet;
+          }
+        } catch {}
 
-        
+        // ⭐ Load rating
+        let rating = 5;
         try {
           const ratingResponse = await AxiosInstance().get(`/review/product/${product._id}/average-rating`);
           rating = ratingResponse.averageRating || 0;
-        } catch { /* ignore rating fetch error */ }
+        } catch {}
 
         return {
           ProductID: product._id,
@@ -210,6 +215,7 @@ const removeFromWishlist = async (wishlistId) => {
     setLoading(false);
   }
 };
+
   const getIconForCategory = (name: string) => {
     switch (name) {
       case 'Áo Khoác':

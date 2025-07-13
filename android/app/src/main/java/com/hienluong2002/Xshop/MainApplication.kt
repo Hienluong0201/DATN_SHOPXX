@@ -1,4 +1,4 @@
-package com.hienluong2002.xshop;
+package com.hienluong2002.Xshop;
 
 
 import android.app.Application
