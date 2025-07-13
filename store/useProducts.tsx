@@ -187,6 +187,7 @@ const fetchProducts = async ({ categoryId, page = 1, limit = 10 }) => {
         Description: product.description || '',
         Price: product.price.toLocaleString('vi-VN'),
         Image: imageURLs[0],
+        Images: imageURLs,
         Rating: product.averageRating || 0, // ✅ Dùng luôn từ API chính
       };
     });
