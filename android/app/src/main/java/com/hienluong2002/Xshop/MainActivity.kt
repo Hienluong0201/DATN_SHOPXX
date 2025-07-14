@@ -1,4 +1,3 @@
-
 package com.hienluong2002.Xshop
 import expo.modules.splashscreen.SplashScreenManager
 import android.os.Build

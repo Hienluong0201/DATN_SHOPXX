@@ -60,41 +60,52 @@ const ProfileScreen = () => {
   };
 
   const handleSave = async () => {
-    if (!name || !email || !phone) {
-      Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin.');
-      return;
-    }
+  if (!name || !email || !phone) {
+    Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin.');
+    return;
+  }
 
-    try {
-      const formData = new FormData();
-      formData.append('name', name);
-      formData.append('phone', phone);
-      formData.append('password', user.password || '');
-      if (image && image !== user.avatar) {
-        formData.append('img', {
-          uri: image,
-          name: `avatar_${user._id}.jpg`,
-          type: 'image/jpeg',
-        });
-      }
+  try {
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('phone', phone);
+    formData.append('password', user.password || '');
 
-      const response = await AxiosInstance().put(`/users/update/${user._id}`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+    if (image && image !== user.avatar) {
+      formData.append('img', {
+        uri: image,
+        name: `avatar_${user._id}.jpg`,
+        type: 'image/jpeg',
       });
-      console.log('Cập nhật thành công:', response);
-
-      // Lưu user mới vào useAuth, giữ lại avatar từ state nếu API không trả về
-      const updatedUser = {
-        ...response.user,
-        avatar: image || user.avatar || null, // Giữ avatar hiện tại
-      };
-      setUser(updatedUser);
-      Alert.alert('Thành công', 'Thông tin hồ sơ đã được cập nhật.');
-    } catch (err) {
-      console.error('Lỗi khi cập nhật:', err.message);
-      Alert.alert('Lỗi', 'Không thể cập nhật thông tin. Vui lòng thử lại.');
     }
-  };
+
+    const res = await fetch(`https://datn-sever.onrender.com/users/update/${user._id}`, {
+      method: 'PUT', // hoặc POST nếu backend bạn hỗ trợ POST cập nhật
+      body: formData,
+      headers: {
+        Accept: 'application/json',
+        // ❌ KHÔNG thêm Content-Type thủ công
+      },
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.message || 'Lỗi cập nhật');
+    }
+
+    const updatedUser = {
+      ...data.user,
+      avatar: image || user.avatar || null,
+    };
+
+    setUser(updatedUser);
+    Alert.alert('✅ Thành công', 'Thông tin hồ sơ đã được cập nhật.');
+  } catch (err) {
+    console.error('❌ Lỗi khi cập nhật:', err.message);
+    Alert.alert('Lỗi', err.message || 'Không thể cập nhật thông tin');
+  }
+};
 
   return (
     <ScrollView style={styles.container}>
@@ -191,6 +202,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
+    marginTop : 30,
     backgroundColor: '#f0f2f5',
   },
   header: {

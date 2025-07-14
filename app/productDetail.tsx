@@ -8,6 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   TextInput,
+  FlatList
 } from 'react-native';
 import { useLocalSearchParams, useFocusEffect, router } from 'expo-router';
 import { useProducts } from '../store/useProducts';
@@ -96,30 +97,32 @@ const ProductDetail = () => {
   };
 
   // Lấy dữ liệu sản phẩm, biến thể, review
-  const loadData = useCallback(async () => {
-    if (!productId || typeof productId !== 'string' || isDataLoaded) return;
-    setIsDataLoaded(false);
-    try {
-      const fetchedProduct = getProductById(productId);
-      const fetchedVariants = await fetchProductVariants(productId);
-
-      // Gọi API lấy review
-      let reviewData = [];
+    const loadData = useCallback(async () => {
+      if (!productId || typeof productId !== 'string' || isDataLoaded) return;
+      setIsDataLoaded(false);
       try {
-        reviewData = await AxiosInstance().get(`/review/product/${productId}`);
-        setReviews(reviewData || []);
-      } catch (err) {
-        setReviews([]);
-      }
+        const fetchedProduct = getProductById(productId);
+        console.log("Ảnh sản phẩm:", fetchedProduct?.Images || fetchedProduct?.images);
+        const fetchedVariants = await fetchProductVariants(productId);
 
-      setProduct(fetchedProduct || null);
-      setVariants(fetchedVariants || []);
-      setSelectedVariant(fetchedVariants.length ? fetchedVariants[0] : null);
-      setIsDataLoaded(true);
-    } catch (err) {
-      setIsDataLoaded(true);
-    }
-  }, [productId, getProductById, fetchProductVariants, isDataLoaded]);
+        // Gọi API lấy review
+        let reviewData = [];
+        try {
+          reviewData = await AxiosInstance().get(`/review/product/${productId}`);
+          // console.log("du lieu anh " , reviewData)
+          setReviews(reviewData || []);
+        } catch (err) {
+          setReviews([]);
+        }
+
+        setProduct(fetchedProduct || null);
+        setVariants(fetchedVariants || []);
+        setSelectedVariant(fetchedVariants.length ? fetchedVariants[0] : null);
+        setIsDataLoaded(true);
+      } catch (err) {
+        setIsDataLoaded(true);
+      }
+    }, [productId, getProductById, fetchProductVariants, isDataLoaded]);
 
   // Reload lại data sau khi gửi review thành công
   const reloadReview = async () => {
@@ -287,7 +290,24 @@ const ProductDetail = () => {
         contentContainerStyle={{ paddingBottom: 70 }}
       >
         {/* Ảnh sản phẩm */}
-        <Image source={{ uri: product.Image }} style={styles.image} />
+        <FlatList
+            data={product.Images || [product.Image]}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(_, index) => index.toString()}
+            renderItem={({ item }) => (
+              <Image
+                source={{ uri: item }}
+                style={{
+                  width: width, // lấy width từ useWindowDimensions()
+                  height: 350,
+                  resizeMode: 'contain',
+                  backgroundColor: '#f5f5f5',
+                }}
+              />
+            )}
+          />
         <View style={styles.details}>
           <Text style={styles.name}>{product.Name}</Text>
           <View style={styles.priceContainer}>
@@ -467,6 +487,27 @@ const ProductDetail = () => {
                   </Text>
                 </View>
                 <Text style={{ color: '#222', marginTop: 2 }}>{rv.comment}</Text>
+                {Array.isArray(rv.images) && rv.images.length > 0 && (
+  <ScrollView
+    horizontal
+    showsHorizontalScrollIndicator={false}
+    style={{ marginTop: 10 }}
+  >
+    {rv.images.map((img, idx) => (
+      <Image
+        key={idx}
+        source={{ uri: img }}
+        style={{
+          width: 80,
+          height: 80,
+          borderRadius: 8,
+          marginRight: 8,
+          backgroundColor: '#eee',
+        }}
+      />
+    ))}
+  </ScrollView>
+)}
               </View>
             ))
           )}

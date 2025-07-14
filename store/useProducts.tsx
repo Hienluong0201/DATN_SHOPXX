@@ -163,42 +163,34 @@ const removeFromWishlist = async (wishlistId) => {
     }
   };
 
- const fetchProducts = async ({ categoryId, page = 1, limit = 10 }) => {
+const fetchProducts = async ({ categoryId, page = 1, limit = 10 }) => {
   setLoading(true);
   setError(null);
   try {
     const query = categoryId === 'all'
       ? `/products?page=${page}&limit=${limit}`
       : `/products?categoryID=${categoryId}&page=${page}&limit=${limit}`;
+    
     const productResponse = await AxiosInstance().get(query);
+    const fetchedProducts = (productResponse.products || []).map((product) => {
+      if (!product._id) return null;
 
-    const fetchedProducts = await Promise.all(
-      (productResponse.products || []).map(async (product) => {
-        if (!product._id) return null;
-        let imageURLs = ['https://via.placeholder.com/150'];
-        let rating = 5; 
-        try {
-          const imageResponse = await AxiosInstance().get(`/img?productID=${product._id}`);
-          imageURLs = imageResponse[0]?.imageURL || imageURLs;
-        } catch { }
+      // 🖼️ Load ảnh trực tiếp từ product.images
+      const imageURLs = Array.isArray(product.images) && product.images.length > 0 
+        ? product.images 
+        : ['https://via.placeholder.com/150'];
 
-        
-        try {
-          const ratingResponse = await AxiosInstance().get(`/review/product/${product._id}/average-rating`);
-          rating = ratingResponse.averageRating || 0;
-        } catch { /* ignore rating fetch error */ }
-
-        return {
-          ProductID: product._id,
-          CategoryID: product.categoryID || '',
-          Name: product.name,
-          Description: product.description || '',
-          Price: product.price.toLocaleString('vi-VN'),
-          Image: imageURLs[0],
-          Rating: rating,
-        };
-      })
-    );
+      return {
+        ProductID: product._id,
+        CategoryID: product.categoryID || '',
+        Name: product.name,
+        Description: product.description || '',
+        Price: product.price.toLocaleString('vi-VN'),
+        Image: imageURLs[0],
+        Images: imageURLs,
+        Rating: product.averageRating || 0, // ✅ Dùng luôn từ API chính
+      };
+    });
 
     const validProducts = fetchedProducts.filter((p) => p !== null);
     setProducts((prev) => page === 1 ? validProducts : [...prev, ...validProducts]);
@@ -210,6 +202,7 @@ const removeFromWishlist = async (wishlistId) => {
     setLoading(false);
   }
 };
+
   const getIconForCategory = (name: string) => {
     switch (name) {
       case 'Áo Khoác':

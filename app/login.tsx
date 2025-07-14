@@ -1,9 +1,16 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View,ActivityIndicator } from 'react-native';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
 import { useAuth } from '../store/useAuth';
+import {
+  AccessToken,
+  LoginManager,
+  GraphRequest,
+  GraphRequestManager,
+} from 'react-native-fbsdk-next';
+
 
 export default function LoginScreen() {
   const [isEmailLogin, setIsEmailLogin] = useState(true);
@@ -70,10 +77,49 @@ export default function LoginScreen() {
       setLoading(false);
     }
   };
-
-  const handleSocialLogin = (platform) => {
+const handleSocialLogin = async (platform) => {
+  if (platform !== 'Facebook') {
     Alert.alert('Thông báo', `Đăng nhập bằng ${platform} đang được phát triển...`);
-  };
+    return;
+  }
+
+  try {
+    const result = await LoginManager.logInWithPermissions(['public_profile', 'email']);
+    if (result.isCancelled) {
+      Alert.alert('Thông báo', 'Bạn đã hủy đăng nhập Facebook');
+      return;
+    }
+
+    const accessTokenData = await AccessToken.getCurrentAccessToken();
+    if (!accessTokenData) {
+      Alert.alert('Lỗi', 'Không lấy được access token từ Facebook');
+      return;
+    }
+
+    const accessToken = accessTokenData.accessToken;
+    console.log('📌 AccessToken:', accessToken);
+
+    // Gửi token về backend để login
+    const response = await AxiosInstance().post('/users/login-facebook', {
+      accessToken,
+    });
+
+    console.log('✅ Login FB response:', response);
+
+    if (response && response.user) {
+      await login(response.user);
+      router.replace('/home');
+    } else {
+      console.log('❌ Không có user trong response');
+      Alert.alert('Lỗi', 'Đăng nhập Facebook thất bại');
+    }
+  } catch (error) {
+    // Ghi log lỗi cụ thể từ backend trả về
+    console.log('❌ Facebook login error:', error.response?.data || error.message);
+    Alert.alert('Lỗi', 'Đăng nhập bằng Facebook thất bại');
+  }
+};
+
 
   const goToRegister = () => {
     router.push('/register');
@@ -81,6 +127,12 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
+      {loading && (
+      <View style={styles.loadingOverlay}>
+        <ActivityIndicator size="large" color="#8B4513" />
+        <Text style={styles.loadingText}>Đang xử lý...</Text>
+      </View>
+    )}
       <Text style={styles.title}>Đăng nhập</Text>
 
       <View style={styles.toggleContainer}>
@@ -183,6 +235,23 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadingOverlay: {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  justifyContent: 'center',
+  alignItems: 'center',
+  zIndex: 10,
+},
+loadingText: {
+  marginTop: 10,
+  color: '#fff',
+  fontSize: 16,
+  fontWeight: '500',
+},
   container: {
     flex: 1,
     padding: 24,
