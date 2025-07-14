@@ -1,3 +1,4 @@
+
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
@@ -179,4 +180,6 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+    implementation 'com.facebook.android:facebook-android-sdk:[12.3.0,13)'
+
 }

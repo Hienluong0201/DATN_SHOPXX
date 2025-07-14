@@ -41,7 +41,7 @@ const navigation = useNavigation();
       <View style={styles.profileSection}>
         <Image
           source={{
-            uri: user?.avatar || 'https://example.com/default-avatar.jpg', // Sử dụng avatar từ user hoặc mặc định
+            uri: user?.img || 'https://example.com/default-avatar.jpg', // Sử dụng avatar từ user hoặc mặc định
           }}
           style={styles.avatar}
          

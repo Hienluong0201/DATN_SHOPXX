@@ -29,6 +29,7 @@ import BannerComponent from '../components/BannerComponent';
 import CategoriesComponent from '../components/CategoriesComponent';
 import QuickAccessComponent from '../components/QuickAccessComponent';
 import ProductsComponent from '../components/ProductsComponent';
+import AdvancedFilterScreen from '../AdvancedFilterScreen';
 
 export default function HomeScreen() {
   const { user, loadUser, setUser } = useAuth();
@@ -254,7 +255,7 @@ export default function HomeScreen() {
   const renderItem = ({ item }: any) => {
     switch (item.type) {
       case 'search':
-        return <SearchComponent onFilterPress={() => setFilterModalVisible(true)} />;
+        return <SearchComponent onFilterPress={() => router.push('/AdvancedFilterScreen')} />
       case 'banner':
         return (
           <BannerComponent

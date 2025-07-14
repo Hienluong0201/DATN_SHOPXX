@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 
-// Định nghĩa type User với các trường từ API
+// Định nghĩa User chuẩn từ API của bạn
 type User = {
   _id: string;
   name: string;
@@ -15,15 +15,24 @@ type User = {
   phone?: string;
 };
 
-type AuthState = {
-  user: User | null;
-  login: (user: User) => Promise<void>;
-  logout: () => Promise<void>;
-  loadUser: () => Promise<void>;
-  setUser: (user: User | null) => void;
+// User đơn giản từ Facebook
+type FBUser = {
+  id: string;
+  name: string;
+  email?: string;
 };
 
-// Hàm kiểm tra dữ liệu User có hợp lệ không
+type AuthUser = User | FBUser;
+
+type AuthState = {
+  user: AuthUser | null;
+  login: (user: AuthUser) => Promise<void>;
+  logout: () => Promise<void>;
+  loadUser: () => Promise<void>;
+  setUser: (user: AuthUser | null) => void;
+};
+
+// Kiểm tra User chuẩn từ API
 const isValidUser = (data: any): data is User => {
   return (
     data &&
@@ -39,14 +48,25 @@ const isValidUser = (data: any): data is User => {
   );
 };
 
+// Kiểm tra user từ Facebook
+const isValidFBUser = (data: any): data is FBUser => {
+  return (
+    data &&
+    typeof data === 'object' &&
+    typeof data.id === 'string' &&
+    typeof data.name === 'string'
+  );
+};
+
 export const useAuth = create<AuthState>((set, get) => ({
   user: null,
 
-  login: async (user: User) => {
+  login: async (user: AuthUser) => {
     try {
-      if (!isValidUser(user)) {
+      if (!isValidUser(user) && !isValidFBUser(user)) {
         throw new Error('Invalid user data');
       }
+
       await AsyncStorage.setItem('isLoggedIn', 'true');
       await AsyncStorage.setItem('user', JSON.stringify(user));
       set({ user });
@@ -76,7 +96,7 @@ export const useAuth = create<AuthState>((set, get) => ({
     try {
       const userData = await AsyncStorage.getItem('user');
       if (userData) {
-        let parsedUser: User;
+        let parsedUser: AuthUser;
         try {
           parsedUser = JSON.parse(userData);
         } catch (parseError) {
@@ -85,20 +105,22 @@ export const useAuth = create<AuthState>((set, get) => ({
           return;
         }
 
-        if (!isValidUser(parsedUser)) {
-          console.error('Invalid user data in AsyncStorage');
+        if (!isValidUser(parsedUser) && !isValidFBUser(parsedUser)) {
+          console.warn('Invalid user data in AsyncStorage');
           set({ user: null });
           return;
         }
 
         const currentUser = get().user;
-        // So sánh nông để tối ưu hiệu suất
-        if (!currentUser || currentUser._id !== parsedUser._id) {
+        const isSameUser = currentUser && ('_id' in currentUser)
+          ? currentUser._id === (parsedUser as any)._id
+          : currentUser?.id === (parsedUser as any).id;
+
+        if (!isSameUser) {
           set({ user: parsedUser });
         }
       } else {
-        const currentUser = get().user;
-        if (currentUser !== null) {
+        if (get().user !== null) {
           set({ user: null });
         }
       }
