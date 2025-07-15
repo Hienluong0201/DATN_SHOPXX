@@ -10,7 +10,13 @@ import {
   GraphRequest,
   GraphRequestManager,
 } from 'react-native-fbsdk-next';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import auth from '@react-native-firebase/auth';
 
+// Cấu hình Google Signin (đặt webClientId chính xác của bạn)
+GoogleSignin.configure({
+  webClientId: '662791875369-iajnbcash24usai8up8ureghqbcppnif.apps.googleusercontent.com',
+});
 
 export default function LoginScreen() {
   const [isEmailLogin, setIsEmailLogin] = useState(true);
@@ -47,6 +53,41 @@ export default function LoginScreen() {
       setLoading(false);
     }
   };
+const handleGoogleLogin = async () => {
+  try {
+    console.log('[GoogleSignin] Bắt đầu kiểm tra Google Play Services...');
+    const playServices = await GoogleSignin.hasPlayServices();
+    console.log('[GoogleSignin] Play Services:', playServices);
+
+    console.log('[GoogleSignin] Bắt đầu gọi GoogleSignin.signIn...');
+    const result = await GoogleSignin.signIn();
+    console.log('[GoogleSignin] Kết quả signIn:', result);
+
+    const idToken = result?.data?.idToken;
+    if (!idToken) {
+      console.log('[GoogleSignin] Không lấy được idToken!', result);
+      Alert.alert('Lỗi', 'Không lấy được idToken từ Google');
+      return;
+    }
+    console.log('[GoogleSignin] Đã lấy được idToken:', idToken);
+
+    // Gửi token lên backend để lấy user
+    const response = await AxiosInstance().post('/users/login-google', { idToken });
+    const user = response.user;
+
+    if (user) {
+      console.log('[Backend] User nhận được:', user);
+      await login(user);  // Lưu user vào zustand và AsyncStorage
+      router.replace('/home');
+    } else {
+      Alert.alert('Lỗi', 'Đăng nhập Google thất bại ở backend');
+    }
+  } catch (error) {
+    console.log('[Google login error]:', error);
+    Alert.alert('Lỗi', 'Đăng nhập Google thất bại');
+  }
+};
+
 
   const handlePhoneSubmit = async () => {
     if (phone === '') {
@@ -217,9 +258,9 @@ const handleSocialLogin = async (platform) => {
         <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('Apple')}>
           <MaterialCommunityIcons name="apple" size={24} color="#000" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('Google')}>
-          <MaterialCommunityIcons name="google" size={24} color="#DB4437" />
-        </TouchableOpacity>
+       <TouchableOpacity style={styles.socialBtn} onPress={handleGoogleLogin}>
+  <MaterialCommunityIcons name="google" size={24} color="#DB4437" />
+</TouchableOpacity>
         <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('Facebook')}>
           <MaterialCommunityIcons name="facebook" size={24} color="#3B5998" />
         </TouchableOpacity>
