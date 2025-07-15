@@ -1,6 +1,6 @@
-import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
+import { create } from 'zustand';
 
 // Định nghĩa User chuẩn từ API của bạn
 type User = {
@@ -22,7 +22,16 @@ type FBUser = {
   email?: string;
 };
 
-type AuthUser = User | FBUser;
+// User từ Firebase (Google, v.v)
+type FirebaseUser = {
+  uid: string;
+  email: string;
+  displayName?: string;
+  phoneNumber?: string;
+  photoURL?: string;
+};
+
+type AuthUser = User | FBUser | FirebaseUser;
 
 type AuthState = {
   user: AuthUser | null;
@@ -58,12 +67,22 @@ const isValidFBUser = (data: any): data is FBUser => {
   );
 };
 
+// Kiểm tra user từ Firebase
+const isValidFirebaseUser = (data: any): data is FirebaseUser => {
+  return (
+    data &&
+    typeof data === 'object' &&
+    typeof data.uid === 'string' &&
+    typeof data.email === 'string'
+  );
+};
+
 export const useAuth = create<AuthState>((set, get) => ({
   user: null,
 
   login: async (user: AuthUser) => {
     try {
-      if (!isValidUser(user) && !isValidFBUser(user)) {
+      if (!isValidUser(user) && !isValidFBUser(user) && !isValidFirebaseUser(user)) {
         throw new Error('Invalid user data');
       }
 
@@ -105,15 +124,20 @@ export const useAuth = create<AuthState>((set, get) => ({
           return;
         }
 
-        if (!isValidUser(parsedUser) && !isValidFBUser(parsedUser)) {
+        if (
+          !isValidUser(parsedUser) &&
+          !isValidFBUser(parsedUser) &&
+          !isValidFirebaseUser(parsedUser)
+        ) {
           console.warn('Invalid user data in AsyncStorage');
           set({ user: null });
           return;
         }
 
         const currentUser = get().user;
-        const isSameUser = currentUser && ('_id' in currentUser)
-          ? currentUser._id === (parsedUser as any)._id
+        const isSameUser = currentUser && ('_id' in currentUser || 'uid' in currentUser)
+          ? (('_id' in currentUser ? currentUser._id : currentUser.uid) ===
+             ('_id' in parsedUser ? (parsedUser as any)._id : (parsedUser as any).uid))
           : currentUser?.id === (parsedUser as any).id;
 
         if (!isSameUser) {
