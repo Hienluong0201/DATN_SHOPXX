@@ -1,14 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform, Alert, SafeAreaView } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+  SafeAreaView,
+  Image,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
 import { useAuth } from '../store/useAuth';
-import { io } from 'socket.io-client';   
+import { io } from 'socket.io-client';
+
+const emptyImg = require('../assets/images/laughing.png'); // Đổi path đúng với hình bạn lưu
 
 const ChatWithShop = () => {
   const { user } = useAuth();
-  const userID = user?._id || '682e481011a6a754eef1302f';
+  const userID = user?._id; // KHÔNG dùng mặc định!
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,7 +31,7 @@ const ChatWithShop = () => {
   const flatListRef = useRef(null);
   const socketRef = useRef(null);
 
-  // Fetch once when mount
+  // Fetch messages when mount
   const fetchMessages = async () => {
     if (!userID) return;
     setLoading(true);
@@ -42,7 +57,6 @@ const ChatWithShop = () => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     } catch (err) {
-      console.error('Lỗi lấy tin nhắn:', err.message);
       setError('Không thể tải tin nhắn. Vui lòng thử lại sau.');
       setMessages([]);
     } finally {
@@ -50,7 +64,7 @@ const ChatWithShop = () => {
     }
   };
 
-  // Send message
+  // Gửi tin nhắn
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !userID) return;
     const payload = { userID, sender: 'user', text: newMessage };
@@ -58,9 +72,8 @@ const ChatWithShop = () => {
     try {
       await AxiosInstance().post('/messages', payload);
       setNewMessage('');
-      // Không cần fetch lại — sẽ nhận socket realtime
+      // socket realtime sẽ nhận tin nhắn mới
     } catch (err) {
-      console.error('Lỗi gửi tin nhắn:', err.message);
       setError('Không gửi được tin nhắn. Vui lòng thử lại.');
       Alert.alert('Lỗi', 'Không gửi được tin nhắn. Vui lòng thử lại.');
     } finally {
@@ -74,17 +87,14 @@ const ChatWithShop = () => {
 
     fetchMessages(); // load tin nhắn ban đầu
 
-    const socket = io("https://datn-sever.onrender.com"); // 👉 thay IP thật
+    const socket = io("https://datn-sever.onrender.com");
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      console.log("✅ Socket connected", socket.id);
+      // console.log("Socket connected", socket.id);
     });
 
     socket.on("new_message", (msg) => {
-      console.log("📥 nhận realtime", msg);
-
-      // lọc đúng userID
       if (msg.userID === userID) {
         setMessages((prev) => [
           ...prev,
@@ -117,16 +127,44 @@ const ChatWithShop = () => {
   };
 
   const renderMessage = ({ item }) => (
-    <View style={[styles.messageContainer, item.sender === 'user' ? styles.userMessage : styles.shopMessage]}>
+    <View
+      style={[
+        styles.messageContainer,
+        item.sender === 'user' ? styles.userMessage : styles.shopMessage,
+      ]}
+    >
       <Text style={styles.messageText}>{item.text}</Text>
       <Text style={styles.messageTimestamp}>{item.timestamp}</Text>
     </View>
   );
 
+  // ---- Giao diện khi chưa đăng nhập ----
   if (!userID) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.errorText}>Bạn chưa đăng nhập!</Text>
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Image source={emptyImg} style={styles.emptyImage} resizeMode="contain" />
+        <Text style={styles.authTitle}>Bạn chưa đăng nhập</Text>
+        <Text style={styles.authDesc}>
+          Hãy đăng nhập để sử dụng chức năng chat với shop nhé!
+        </Text>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[styles.authBtn, styles.loginBtn]}
+            onPress={() => router.push('/login')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="log-in-outline" size={22} color="#fff" />
+            <Text style={styles.btnText}>Đăng nhập</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.authBtn, styles.backBtn]}
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="arrow-back-outline" size={22} color="#fff" />
+            <Text style={styles.btnText}>Quay lại</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
@@ -234,6 +272,54 @@ const styles = StyleSheet.create({
   },
   errorText: { fontSize: 16, color: '#e74c3c', textAlign: 'center', marginTop: 20 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  // Style cho giao diện chưa đăng nhập
+  emptyImage: {
+    width: 220,
+    height: 220,
+    marginBottom: 24,
+  },
+  authTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#2c2c2c',
+    marginBottom: 10,
+    letterSpacing: 0.2,
+  },
+  authDesc: {
+    fontSize: 15,
+    color: '#60606e',
+    marginBottom: 28,
+    textAlign: 'center',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  authBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 30,
+    marginHorizontal: 4,
+    elevation: 3,
+  },
+  loginBtn: {
+    backgroundColor: '#d97706',
+  },
+  backBtn: {
+    backgroundColor: '#2d5fee',
+  },
+  btnText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
+    marginLeft: 8,
+    letterSpacing: 0.2,
+  },
 });
 
 export default ChatWithShop;

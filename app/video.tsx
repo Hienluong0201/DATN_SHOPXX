@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, FlatList, Dimensions, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, FlatList, Dimensions, StyleSheet, ActivityIndicator, TouchableOpacity, Modal } from 'react-native';
 import { useAuth } from '../store/useAuth';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
-import { Video } from 'expo-av'; // Sử dụng expo-av
+import { Video } from 'expo-av';
 import { useProducts } from '../store/useProducts';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const API_URL = '/api/v1/videos';
 
@@ -20,6 +21,9 @@ export default function VideoFeedScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [pausedIndexes, setPausedIndexes] = useState<number[]>([]);
   const videoRefs = useRef<any[]>([]);
+
+  // Thêm state cho modal login
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   // Cleanup khi rời trang: dừng và giải phóng tất cả video
   useEffect(() => {
@@ -46,7 +50,7 @@ export default function VideoFeedScreen() {
       setPage(nextPage);
       if (newVideos.length < 1) setHasMore(false);
     } catch (e) {
-      Alert.alert('Lỗi', 'Không thể tải video!');
+      // Có thể show Alert nếu muốn
     }
     setRefreshing(false);
     setLoading(false);
@@ -56,7 +60,6 @@ export default function VideoFeedScreen() {
     fetchVideos(1, true);
   }, []);
 
-  // Auto play/pause theo index (và pause nếu user pause bằng overlay)
   useEffect(() => {
     videoRefs.current.forEach((ref, idx) => {
       if (ref) {
@@ -69,7 +72,6 @@ export default function VideoFeedScreen() {
     });
   }, [currentIndex, videos.length, pausedIndexes]);
 
-  // Khi chuyển trang product: pause video (KHÔNG unload!)
   const handleProductPress = (productId: string) => {
     videoRefs.current.forEach(ref => {
       if (ref) ref.pauseAsync?.();
@@ -77,10 +79,10 @@ export default function VideoFeedScreen() {
     router.push({ pathname: '/productDetail', params: { productId } });
   };
 
-  // Like video
+  // Like video (bây giờ sẽ mở modal nếu chưa đăng nhập)
   const toggleLike = async (videoId: string) => {
     if (!user?._id) {
-      Alert.alert('Bạn cần đăng nhập để like video');
+      setShowLoginModal(true);
       return;
     }
     try {
@@ -92,7 +94,7 @@ export default function VideoFeedScreen() {
         return updated;
       });
     } catch (err) {
-      Alert.alert('Lỗi', 'Không thể like video này!');
+      // Có thể show Alert nếu muốn
     }
   };
 
@@ -105,7 +107,6 @@ export default function VideoFeedScreen() {
     );
   };
 
-  // FlatList: update index khi cuộn
   const onViewableItemsChanged = useRef(({ viewableItems }) => {
     if (viewableItems.length > 0) {
       setCurrentIndex(viewableItems[0].index);
@@ -121,110 +122,169 @@ export default function VideoFeedScreen() {
   }
 
   return (
-    <FlatList
-      data={videos}
-      keyExtractor={item => item._id}
-      pagingEnabled
-      showsVerticalScrollIndicator={false}
-      onRefresh={() => fetchVideos(1, true)}
-      refreshing={refreshing}
-      windowSize={2}
-      initialNumToRender={1}
-      maxToRenderPerBatch={1}
-      removeClippedSubviews={true}
-      onEndReached={() => {
-        if (hasMore && !loading && !refreshing) fetchVideos(page + 1);
-      }}
-      onEndReachedThreshold={0.5}
-      renderItem={({ item, index }) => (
-        <TouchableOpacity
-          style={styles.touchableOverlay}
-          activeOpacity={1}
-          onPress={togglePauseCurrentVideo}
-        >
-          <Video
-            ref={ref => (videoRefs.current[index] = ref)}
-            source={{ uri: item.videoURL }}
-            style={styles.video}
-            rate={1.0}
-            volume={1.0}
-            isMuted={false}
-            resizeMode="cover"
-            shouldPlay={index === currentIndex && !pausedIndexes.includes(index)}
-            useNativeControls={false}
-            isLooping
-          />
+    <View style={{ flex: 1, backgroundColor: "#000" }}>
+      <FlatList
+        data={videos}
+        keyExtractor={item => item._id}
+        pagingEnabled
+        showsVerticalScrollIndicator={false}
+        onRefresh={() => fetchVideos(1, true)}
+        refreshing={refreshing}
+        windowSize={2}
+        initialNumToRender={1}
+        maxToRenderPerBatch={1}
+        removeClippedSubviews={true}
+        onEndReached={() => {
+          if (hasMore && !loading && !refreshing) fetchVideos(page + 1);
+        }}
+        onEndReachedThreshold={0.5}
+        renderItem={({ item, index }) => (
+          <TouchableOpacity
+            style={styles.touchableOverlay}
+            activeOpacity={1}
+            onPress={togglePauseCurrentVideo}
+          >
+            <Video
+              ref={ref => (videoRefs.current[index] = ref)}
+              source={{ uri: item.videoURL }}
+              style={styles.video}
+              rate={1.0}
+              volume={1.0}
+              isMuted={false}
+              resizeMode="cover"
+              shouldPlay={index === currentIndex && !pausedIndexes.includes(index)}
+              useNativeControls={false}
+              isLooping
+            />
+            {index === currentIndex && pausedIndexes.includes(index) && (
+              <View style={styles.centerPlayIcon}>
+                <Text style={{ fontSize: 68, color: '#fff', opacity: 0.95 }}>▶️</Text>
+              </View>
+            )}
+            <View style={styles.infoOverlay}>
+              <Text style={styles.caption}>{item.caption}</Text>
+              <Text style={styles.meta}>Người đăng: {item.userID?.name}</Text>
+              <Text style={styles.meta}>Lượt xem: {item.views}</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
+                {Array.isArray(item.products) && item.products.length > 0 ? (
+                  item.products.map((prod, idx2) => {
+                    const prodId = typeof prod === 'string' ? prod : prod?._id;
+                    const prodObj = getProductById(prodId);
+                    return (
+                      <TouchableOpacity
+                        key={prodId || idx2}
+                        style={styles.productTag}
+                        onPress={e => {
+                          e.stopPropagation();
+                          handleProductPress(prodId);
+                        }}
+                      >
+                        <Text style={{ color: '#2e7d32', fontWeight: 'bold' }}>
+                          {prodObj?.Name || 'Xem sản phẩm'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })
+                ) : (
+                  <Text style={{ color: '#bdbdbd', fontSize: 13 }}>Chưa gắn sản phẩm nào</Text>
+                )}
+              </View>
+              <View style={{ flexDirection: 'row', marginTop: 8 }}>
+                <TouchableOpacity
+                  style={styles.likeBtn}
+                  onPress={e => {
+                    e.stopPropagation();
+                    toggleLike(item._id);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{
+                    color: item.likes.includes(user?._id) ? '#e91e63' : '#eee',
+                    fontWeight: 'bold',
+                    fontSize: 17,
+                  }}>
+                    {item.likes.length} ♥ Thích
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
+        snapToInterval={SCREEN_HEIGHT}
+        decelerationRate="fast"
+        onViewableItemsChanged={onViewableItemsChanged.current}
+        viewabilityConfig={{ viewAreaCoveragePercentThreshold: 80 }}
+        ListEmptyComponent={<Text style={{ color: '#fff', textAlign: 'center', marginTop: 32 }}>Chưa có video nào!</Text>}
+        getItemLayout={(_, index) => (
+          { length: SCREEN_HEIGHT, offset: SCREEN_HEIGHT * index, index }
+        )}
+      />
 
-          {/* Overlay Play Icon khi video đang bị pause */}
-          {index === currentIndex && pausedIndexes.includes(index) && (
-            <View style={styles.centerPlayIcon}>
-              <Text style={{ fontSize: 68, color: '#fff', opacity: 0.95 }}>▶️</Text>
-            </View>
-          )}
-          {/* Overlay info + nút like, sản phẩm */}
-          <View style={styles.infoOverlay}>
-            <Text style={styles.caption}>{item.caption}</Text>
-            <Text style={styles.meta}>Người đăng: {item.userID?.name}</Text>
-            <Text style={styles.meta}>Lượt xem: {item.views}</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
-              {Array.isArray(item.products) && item.products.length > 0 ? (
-                item.products.map((prod, idx2) => {
-                  const prodId = typeof prod === 'string' ? prod : prod?._id;
-                  const prodObj = getProductById(prodId);
-                  return (
-                    <TouchableOpacity
-                      key={prodId || idx2}
-                      style={styles.productTag}
-                      onPress={e => {
-                        e.stopPropagation(); // Không pause video khi bấm vào sản phẩm
-                        handleProductPress(prodId);
-                      }}
-                    >
-                      <Text style={{ color: '#2e7d32', fontWeight: 'bold' }}>
-                        {prodObj?.Name || 'Xem sản phẩm'}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })
-              ) : (
-                <Text style={{ color: '#bdbdbd', fontSize: 13 }}>Chưa gắn sản phẩm nào</Text>
-              )}
-            </View>
-            <View style={{ flexDirection: 'row', marginTop: 8 }}>
+      {/* Modal đăng nhập khi chưa login mà nhấn Like */}
+      <Modal
+        visible={showLoginModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLoginModal(false)}
+      >
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+          activeOpacity={1}
+          onPress={() => setShowLoginModal(false)}
+        >
+          <View style={{
+            width: 320,
+            backgroundColor: '#fff',
+            borderRadius: 20,
+            padding: 28,
+            alignItems: 'center',
+          }}>
+            <Ionicons name="log-in-outline" size={50} color="#007AFF" style={{ marginBottom: 14 }} />
+            <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 6, color: '#222' }}>Bạn cần đăng nhập!</Text>
+            <Text style={{ color: '#444', fontSize: 15, marginBottom: 26, textAlign: 'center' }}>
+              Vui lòng đăng nhập để thực hiện thao tác này.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 16 }}>
               <TouchableOpacity
-                style={styles.likeBtn}
-                onPress={e => {
-                  e.stopPropagation(); // Không pause khi bấm like
-                  toggleLike(item._id);
+                style={{
+                  backgroundColor: '#007AFF',
+                  paddingHorizontal: 24,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  marginRight: 10,
                 }}
-                activeOpacity={0.7}
+                onPress={() => {
+                  setShowLoginModal(false);
+                  router.push('/login'); // Đường dẫn sang màn Login, đổi theo app của bạn
+                }}
               >
-                <Text style={{
-                  color: item.likes.includes(user._id) ? '#e91e63' : '#eee',
-                  fontWeight: 'bold',
-                  fontSize: 17,
-                }}>
-                  {item.likes.length} ♥ Thích
-                </Text>
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Đăng nhập</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#e0e0e0',
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                }}
+                onPress={() => setShowLoginModal(false)}
+              >
+                <Text style={{ color: '#007AFF', fontWeight: 'bold', fontSize: 16 }}>Để sau</Text>
               </TouchableOpacity>
             </View>
           </View>
         </TouchableOpacity>
-      )}
-      snapToInterval={SCREEN_HEIGHT}
-      decelerationRate="fast"
-      onViewableItemsChanged={onViewableItemsChanged.current}
-      viewabilityConfig={{ viewAreaCoveragePercentThreshold: 80 }}
-      ListEmptyComponent={<Text style={{ color: '#fff', textAlign: 'center', marginTop: 32 }}>Chưa có video nào!</Text>}
-      getItemLayout={(_, index) => (
-        { length: SCREEN_HEIGHT, offset: SCREEN_HEIGHT * index, index }
-      )}
-    />
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-
   touchableOverlay: {
     flex: 1,
     width: '100%',

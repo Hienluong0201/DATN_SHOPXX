@@ -1,19 +1,10 @@
-import AxiosInstance from '../axiosInstance/AxiosInstance';
+import React, { useEffect, useState } from 'react';
+import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useEffect, useState } from 'react';
-import {
-  Alert,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { router } from 'expo-router'; // Thêm import router
+import { router } from 'expo-router';
 import { useAuth } from '../store/useAuth';
+import CustomModal from './components/CustomModal'; // Đổi path này cho đúng với dự án của bạn
 
 const ProfileScreen = () => {
   const { user, loadUser, setUser } = useAuth();
@@ -23,6 +14,19 @@ const ProfileScreen = () => {
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('123 Lê Lợi, Q1, TP.HCM');
   const [image, setImage] = useState(null);
+
+  // Modal state
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalType, setModalType] = useState('success'); // 'success' | 'error' | 'warning'
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
+
+  const showModal = (type, title, message) => {
+    setModalType(type);
+    setModalTitle(title);
+    setModalMessage(message);
+    setModalVisible(true);
+  };
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -43,7 +47,7 @@ const ProfileScreen = () => {
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert('Quyền bị từ chối', 'Bạn cần cho phép truy cập thư viện ảnh.');
+      showModal('error', 'Quyền bị từ chối', 'Bạn cần cho phép truy cập thư viện ảnh.');
       return;
     }
 
@@ -60,52 +64,52 @@ const ProfileScreen = () => {
   };
 
   const handleSave = async () => {
-  if (!name || !email || !phone) {
-    Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin.');
-    return;
-  }
+    if (!name || !email || !phone) {
+      showModal('warning', 'Lỗi', 'Vui lòng điền đầy đủ thông tin.');
+      return;
+    }
 
-  try {
-    const formData = new FormData();
-    formData.append('name', name);
-    formData.append('phone', phone);
-    formData.append('password', user.password || '');
+    try {
+      const formData = new FormData();
+      formData.append('name', name);
+      formData.append('phone', phone);
+      formData.append('password', user.password || '');
 
-    if (image && image !== user.avatar) {
-      formData.append('img', {
-        uri: image,
-        name: `avatar_${user._id}.jpg`,
-        type: 'image/jpeg',
+      if (image && image !== user.avatar) {
+        formData.append('img', {
+          uri: image,
+          name: `avatar_${user._id}.jpg`,
+          type: 'image/jpeg',
+        });
+      }
+
+      const res = await fetch(`https://datn-sever.onrender.com/users/update/${user._id}`, {
+        method: 'PUT',
+        body: formData,
+        headers: {
+          Accept: 'application/json',
+          // Không thêm Content-Type khi gửi FormData
+        },
       });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Lỗi cập nhật');
+      }
+
+      const updatedUser = {
+        ...data.user,
+        avatar: image || user.avatar || null,
+      };
+
+      setUser(updatedUser);
+      showModal('success', 'Thành công', 'Thông tin hồ sơ đã được cập nhật.');
+    } catch (err) {
+      console.error('❌ Lỗi khi cập nhật:', err.message);
+      showModal('error', 'Lỗi', err.message || 'Không thể cập nhật thông tin');
     }
-
-    const res = await fetch(`https://datn-sever.onrender.com/users/update/${user._id}`, {
-      method: 'PUT', // hoặc POST nếu backend bạn hỗ trợ POST cập nhật
-      body: formData,
-      headers: {
-        Accept: 'application/json',
-        // ❌ KHÔNG thêm Content-Type thủ công
-      },
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.message || 'Lỗi cập nhật');
-    }
-
-    const updatedUser = {
-      ...data.user,
-      avatar: image || user.avatar || null,
-    };
-
-    setUser(updatedUser);
-    Alert.alert('✅ Thành công', 'Thông tin hồ sơ đã được cập nhật.');
-  } catch (err) {
-    console.error('❌ Lỗi khi cập nhật:', err.message);
-    Alert.alert('Lỗi', err.message || 'Không thể cập nhật thông tin');
-  }
-};
+  };
 
   return (
     <ScrollView style={styles.container}>
@@ -194,6 +198,14 @@ const ProfileScreen = () => {
       <TouchableOpacity style={styles.button} onPress={handleSave}>
         <Text style={styles.buttonText}>Lưu thông tin</Text>
       </TouchableOpacity>
+
+      <CustomModal
+        isVisible={modalVisible}
+        type={modalType}
+        title={modalTitle}
+        message={modalMessage}
+        onClose={() => setModalVisible(false)}
+      />
     </ScrollView>
   );
 };
@@ -202,7 +214,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    marginTop : 30,
+    marginTop: 30,
     backgroundColor: '#f0f2f5',
   },
   header: {

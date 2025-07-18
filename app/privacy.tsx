@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
   ActivityIndicator,
   RefreshControl,
   FlatList
@@ -13,17 +12,10 @@ import { Ionicons } from '@expo/vector-icons';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
 import { useNavigation } from '@react-navigation/native';
 
-const TAB_OPTIONS = [
-  { label: 'Tất cả', value: 'all' },
-  { label: 'Đang hoạt động', value: 'active' },
-  { label: 'Đã hết hạn', value: 'expired' },
-];
-
 const VoucherScreen = ({ onSelect }) => {
   const navigation = useNavigation();
   const [vouchers, setVouchers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
 
   // Fetch voucher
@@ -44,13 +36,8 @@ const VoucherScreen = ({ onSelect }) => {
     fetchVouchers();
   }, [fetchVouchers]);
 
-  // Lọc voucher theo tab
-  const filteredVouchers = vouchers.filter(v => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'active') return v.isActive;
-    if (activeTab === 'expired') return !v.isActive;
-    return true;
-  });
+  // **Chỉ lấy voucher đang hoạt động**
+  const activeVouchers = vouchers.filter(v => v.isActive);
 
   // Định dạng ngày
   const formatDate = (d) => new Date(d).toLocaleDateString('vi-VN');
@@ -66,19 +53,19 @@ const VoucherScreen = ({ onSelect }) => {
         <Text style={styles.code}>{item.code}</Text>
         <View style={[
           styles.badge,
-          { backgroundColor: item.isActive ? "#d1fae5" : "#fee2e2" }
+          { backgroundColor: "#d1fae5" }
         ]}>
           <Ionicons
-            name={item.isActive ? "checkmark-circle" : "close-circle"}
+            name="checkmark-circle"
             size={15}
-            color={item.isActive ? "#059669" : "#b91c1c"}
+            color="#059669"
             style={{ marginRight: 4 }}
           />
           <Text style={{
-            color: item.isActive ? "#059669" : "#b91c1c",
+            color: "#059669",
             fontWeight: "700"
           }}>
-            {item.isActive ? "Đang hoạt động" : "Hết hạn"}
+            Đang hoạt động
           </Text>
         </View>
       </View>
@@ -89,7 +76,6 @@ const VoucherScreen = ({ onSelect }) => {
       </Text>
       <Text style={styles.info}>Đơn tối thiểu: <Text style={styles.minOrder}>{item.minOrderValue.toLocaleString()}đ</Text></Text>
       <Text style={styles.info}>Hiệu lực: {formatDate(item.validFrom)} - {formatDate(item.validTo)}</Text>
-      {/* ĐÃ BỎ NÚT CHỌN */}
     </TouchableOpacity>
   );
 
@@ -104,38 +90,12 @@ const VoucherScreen = ({ onSelect }) => {
         <View style={{ width: 30 }} />
       </View>
 
-      {/* Tabs */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingVertical: 6, marginBottom: 12 ,}}
-      >
-        {TAB_OPTIONS.map(tab => (
-          <TouchableOpacity
-            key={tab.value}
-            style={[
-              styles.tab,
-              activeTab === tab.value && styles.activeTab
-            ]}
-            onPress={() => setActiveTab(tab.value)}
-            activeOpacity={0.85}
-          >
-            <Text style={[
-              styles.tabText,
-              activeTab === tab.value && styles.activeTabText
-            ]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
       {/* Danh sách voucher */}
       {loading ? (
         <ActivityIndicator size="large" color="#059669" style={{ marginTop: 30 }} />
       ) : (
         <FlatList
-          data={filteredVouchers}
+          data={activeVouchers}
           renderItem={renderVoucher}
           keyExtractor={item => item._id}
           contentContainerStyle={{ paddingBottom: 22 }}
@@ -153,7 +113,7 @@ const VoucherScreen = ({ onSelect }) => {
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons name="pricetags-outline" size={62} color="#bdbdbd" />
-              <Text style={{ color: "#888", marginTop: 12, fontSize: 15 }}>Không có voucher nào</Text>
+              <Text style={{ color: "#888", marginTop: 12, fontSize: 15 }}>Không có voucher nào đang hoạt động</Text>
             </View>
           }
         />
@@ -164,8 +124,8 @@ const VoucherScreen = ({ onSelect }) => {
 
 export default VoucherScreen;
 
-const TAB_HEIGHT = 42; // Chiều cao cố định cho tab
-
+// Giữ nguyên styles như cũ
+const TAB_HEIGHT = 42;
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f7fa', paddingTop: 40 },
   header: {
@@ -173,7 +133,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 14,
-   backgroundColor: '#8B5A2B',
+    backgroundColor: '#8B5A2B',
     borderBottomLeftRadius: 18,
     borderBottomRightRadius: 18,
     elevation: 3,
@@ -181,33 +141,6 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: 3, marginRight: 10 },
   headerTitle: { flex: 1, color: "#fff", fontSize: 21, fontWeight: '800', textAlign: 'center', textTransform: "uppercase" },
-  tab: {
-    height: TAB_HEIGHT,
-    paddingVertical: 0,  // Đã set height rồi, padding không cần
-    paddingHorizontal: 20,
-    backgroundColor: '#fff',
-    borderRadius: 30,
-    marginRight: 10,
-    borderWidth: 1.2,
-    borderColor: "#e0e7ef",
-    alignItems: "center",
-    justifyContent: "center",
-    left: 20
-  },
-  activeTab: {
-    backgroundColor: '#059669',
-    borderColor: '#059669',
-    elevation: 1,
-  },
-  tabText: {
-    fontSize: 15,
-    color: '#059669',
-    fontWeight: '700',
-    lineHeight: TAB_HEIGHT, // Giữa tab
-    textAlign: "center",
-    textAlignVertical: "center"
-  },
-  activeTabText: { color: '#fff', fontWeight: 'bold' },
   card: {
     backgroundColor: '#fff',
     borderRadius: 15,

@@ -1,12 +1,11 @@
 import AxiosInstance from '../axiosInstance/AxiosInstance';
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Modal, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '../store/useAuth';
 import { Picker } from '@react-native-picker/picker';
-import * as Location from 'expo-location';
-import MapView, { Marker } from 'react-native-maps';
+import CustomModal from './components/CustomModal';
 
 const AddressScreen = () => {
   const { user } = useAuth();
@@ -25,80 +24,25 @@ const AddressScreen = () => {
     isDefault: false,
   });
 
-  // State cho dropdown và bản đồ
+  // State cho dropdown
   const [provinces, setProvinces] = useState([]);
   const [districts, setDistricts] = useState([]);
   const [wards, setWards] = useState([]);
   const [selectedProvince, setSelectedProvince] = useState('');
   const [selectedDistrict, setSelectedDistrict] = useState('');
   const [selectedWard, setSelectedWard] = useState('');
-  const [mapMode, setMapMode] = useState(false); // Chế độ bản đồ toàn màn hình
-  const [mapRegion, setMapRegion] = useState(null); // Vùng bản đồ
-  const [selectedLocation, setSelectedLocation] = useState(null); // Vị trí được chọn trên bản đồ
-  const mapRef = useRef(null);
 
-  // Lấy vị trí hiện tại
-  const getCurrentLocation = async () => {
-    let { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Lỗi', 'Vui lòng cho phép truy cập vị trí trong cài đặt để sử dụng bản đồ.');
-      return false;
-    }
-
-    try {
-      let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High, timeout: 10000 });
-      const { latitude, longitude } = location.coords;
-      setMapRegion({
-        latitude,
-        longitude,
-        latitudeDelta: 0.0922,
-        longitudeDelta: 0.0421,
-      });
-      setSelectedLocation({ latitude, longitude });
-      await updateAddressFromLocation(latitude, longitude);
-      return true;
-    } catch (err) {
-      console.error('Lỗi định vị:', err.message);
-      Alert.alert('Lỗi', 'Không thể lấy vị trí hiện tại. Vui lòng kiểm tra GPS hoặc thử lại.');
-      return false;
-    }
+  // Modal thông báo
+  const [notifVisible, setNotifVisible] = useState(false);
+  const [notifType, setNotifType] = useState('success');
+  const [notifTitle, setNotifTitle] = useState('');
+  const [notifMessage, setNotifMessage] = useState('');
+  const showNotif = (type, title, message) => {
+    setNotifType(type);
+    setNotifTitle(title);
+    setNotifMessage(message);
+    setNotifVisible(true);
   };
-
-  // Cập nhật địa chỉ từ tọa độ
-  const updateAddressFromLocation = async (latitude, longitude) => {
-    try {
-      let address = await Location.reverseGeocodeAsync({ latitude, longitude });
-      if (address.length > 0) {
-        const addr = address[0];
-        const provinceMatch = provinces.find(p => 
-          p.name.toLowerCase().includes((addr.city || addr.region || '').toLowerCase().replace('thành phố', '').trim())
-        );
-        if (provinceMatch) setSelectedProvince(provinceMatch.code);
-
-        if (selectedProvince && districts.length > 0) {
-          const districtMatch = districts.find(d => 
-            d.name.toLowerCase().includes((addr.subregion || addr.district || '').toLowerCase().replace('quận', '').trim())
-          );
-          if (districtMatch) setSelectedDistrict(districtMatch.code);
-        }
-
-        if (selectedDistrict && wards.length > 0) {
-          const wardMatch = wards.find(w => 
-            w.name.toLowerCase().includes((addr.name || '').toLowerCase().replace('phường', '').trim())
-          );
-          if (wardMatch) setSelectedWard(wardMatch.code);
-        }
-      }
-    } catch (err) {
-      console.error('Lỗi khi lấy địa chỉ:', err.message);
-    }
-  };
-
-  useEffect(() => {
-    if (modalVisible && mapMode) {
-      getCurrentLocation();
-    }
-  }, [modalVisible, mapMode]);
 
   // Gọi API để lấy danh sách địa chỉ
   useEffect(() => {
@@ -107,7 +51,6 @@ const AddressScreen = () => {
       setLoading(false);
       return;
     }
-
     const fetchAddresses = async () => {
       try {
         setLoading(true);
@@ -123,12 +66,10 @@ const AddressScreen = () => {
         }
         setLoading(false);
       } catch (err) {
-        console.error('Lỗi khi tải địa chỉ:', err.message);
         setError('Không thể tải danh sách địa chỉ. Vui lòng thử lại.');
         setLoading(false);
       }
     };
-
     fetchAddresses();
   }, [userID]);
 
@@ -141,8 +82,7 @@ const AddressScreen = () => {
           const data = await response.json();
           setProvinces(data);
         } catch (err) {
-          console.error('Lỗi khi tải tỉnh/thành phố:', err.message);
-          Alert.alert('Lỗi', 'Không thể tải danh sách tỉnh/thành phố.');
+          showNotif('error', 'Lỗi', 'Không thể tải danh sách tỉnh/thành phố.');
         }
       };
       fetchProvinces();
@@ -160,15 +100,13 @@ const AddressScreen = () => {
           setSelectedDistrict('');
           setWards([]);
           setSelectedWard('');
-          if (selectedLocation) await updateAddressFromLocation(selectedLocation.latitude, selectedLocation.longitude);
         } catch (err) {
-          console.error('Lỗi khi tải quận/huyện:', err.message);
-          Alert.alert('Lỗi', 'Không thể tải danh sách quận/huyện.');
+          showNotif('error', 'Lỗi', 'Không thể tải danh sách quận/huyện.');
         }
       };
       fetchDistricts();
     }
-  }, [selectedProvince, selectedLocation]);
+  }, [selectedProvince]);
 
   // Gọi API để lấy phường/xã khi chọn quận/huyện
   useEffect(() => {
@@ -179,15 +117,13 @@ const AddressScreen = () => {
           const data = await response.json();
           setWards(data.wards || []);
           setSelectedWard('');
-          if (selectedLocation) await updateAddressFromLocation(selectedLocation.latitude, selectedLocation.longitude);
         } catch (err) {
-          console.error('Lỗi khi tải phường/xã:', err.message);
-          Alert.alert('Lỗi', 'Không thể tải danh sách phường/xã.');
+          showNotif('error', 'Lỗi', 'Không thể tải danh sách phường/xã.');
         }
       };
       fetchWards();
     }
-  }, [selectedDistrict, selectedLocation]);
+  }, [selectedDistrict]);
 
   // Mở modal để thêm địa chỉ mới
   const openAddModal = () => {
@@ -196,7 +132,6 @@ const AddressScreen = () => {
     setSelectedProvince('');
     setSelectedDistrict('');
     setSelectedWard('');
-    setMapMode(false);
     setModalVisible(true);
   };
 
@@ -212,38 +147,26 @@ const AddressScreen = () => {
     });
     const addressParts = address.address.split(', ');
     if (addressParts.length === 3) {
-      setSelectedWard(addressParts[0]);
-      setSelectedDistrict(addressParts[1]);
-      setSelectedProvince(addressParts[2]);
+      const provinceObj = provinces.find(p => p.name === addressParts[2]);
+      const districtObj = districts.find(d => d.name === addressParts[1]);
+      const wardObj = wards.find(w => w.name === addressParts[0]);
+      setSelectedProvince(provinceObj?.code?.toString() || '');
+      setSelectedDistrict(districtObj?.code?.toString() || '');
+      setSelectedWard(wardObj?.code?.toString() || '');
     }
-    setMapMode(false);
     setModalVisible(true);
-  };
-
-  // Xử lý chọn vị trí trên bản đồ
-  const onMapPress = async (event) => {
-    const { coordinate } = event.nativeEvent;
-    setSelectedLocation(coordinate);
-    setMapRegion({
-      ...mapRegion,
-      latitude: coordinate.latitude,
-      longitude: coordinate.longitude,
-    });
-    await updateAddressFromLocation(coordinate.latitude, coordinate.longitude);
   };
 
   // Xử lý thêm hoặc cập nhật địa chỉ
   const handleSaveAddress = async () => {
     if (!currentAddress.name || !selectedProvince || !selectedDistrict || !selectedWard || !currentAddress.sdt) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin: Tên, địa chỉ, số điện thoại.');
+      showNotif('warning', 'Thiếu thông tin', 'Vui lòng nhập đầy đủ thông tin: Tên, địa chỉ, số điện thoại.');
       return;
     }
-
     const provinceName = provinces.find((p) => p.code === parseInt(selectedProvince))?.name || '';
     const districtName = districts.find((d) => d.code === parseInt(selectedDistrict))?.name || '';
     const wardName = wards.find((w) => w.code === parseInt(selectedWard))?.name || '';
     const fullAddress = `${wardName}, ${districtName}, ${provinceName}`;
-
     try {
       const payload = {
         userID,
@@ -252,7 +175,6 @@ const AddressScreen = () => {
         sdt: currentAddress.sdt,
         isDefault: currentAddress.isDefault,
       };
-
       if (isEditMode) {
         const response = await AxiosInstance().put(`/adress/${currentAddress._id}`, payload);
         setAddresses((prev) =>
@@ -279,31 +201,14 @@ const AddressScreen = () => {
           );
         }
       }
-
       setModalVisible(false);
       setCurrentAddress({ _id: '', name: '', address: '', sdt: '', isDefault: false });
       setSelectedProvince('');
       setSelectedDistrict('');
       setSelectedWard('');
-      setMapRegion(null);
-      setSelectedLocation(null);
-      setMapMode(false);
-      Alert.alert('Thành công', isEditMode ? 'Đã cập nhật địa chỉ!' : 'Đã thêm địa chỉ mới!');
+      showNotif('success', 'Thành công', isEditMode ? 'Đã cập nhật địa chỉ!' : 'Đã thêm địa chỉ mới!');
     } catch (err) {
-      console.error(`Lỗi khi ${isEditMode ? 'cập nhật' : 'thêm'} địa chỉ:`, err.message);
-      Alert.alert('Lỗi', `Không thể ${isEditMode ? 'cập nhật' : 'thêm'} địa chỉ. Vui lòng thử lại.`);
-    }
-  };
-
-  // Quay lại giao diện nhập liệu từ bản đồ
-  const handleMapConfirm = () => {
-    setMapMode(false);
-  };
-
-  // Làm mới vị trí
-  const refreshLocation = async () => {
-    if (await getCurrentLocation()) {
-      mapRef.current?.animateToRegion(mapRegion, 1000);
+      showNotif('error', 'Lỗi', `Không thể ${isEditMode ? 'cập nhật' : 'thêm'} địa chỉ. Vui lòng thử lại.`);
     }
   };
 
@@ -317,7 +222,6 @@ const AddressScreen = () => {
 
   return (
     <ScrollView style={styles.container}>
-      
       <View style={styles.header}>
         <TouchableOpacity onPress={goBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#2c2c2c" />
@@ -325,7 +229,6 @@ const AddressScreen = () => {
         <Text style={styles.title}>Địa chỉ</Text>
         <View style={styles.placeholder} />
       </View>
-
       {loading ? (
         <Text style={styles.loadingText}>Đang tải...</Text>
       ) : error ? (
@@ -363,8 +266,6 @@ const AddressScreen = () => {
       <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
         <Text style={styles.addText}>+ Thêm địa chỉ mới</Text>
       </TouchableOpacity>
-
-      {/* Modal để thêm hoặc chỉnh sửa địa chỉ */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -372,126 +273,98 @@ const AddressScreen = () => {
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalContainer}>
-          {!mapMode ? (
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>
-                {isEditMode ? 'Chỉnh sửa địa chỉ' : 'Thêm địa chỉ mới'}
-              </Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Tên (ví dụ: Nguyễn Văn A)"
-                value={currentAddress.name}
-                onChangeText={(text) => setCurrentAddress({ ...currentAddress, name: text })}
-              />
-              <Picker
-                selectedValue={selectedProvince}
-                onValueChange={(itemValue) => setSelectedProvince(itemValue)}
-                style={styles.picker}
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {isEditMode ? 'Chỉnh sửa địa chỉ' : 'Thêm địa chỉ mới'}
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Tên (ví dụ: Nguyễn Văn A)"
+              value={currentAddress.name}
+              onChangeText={(text) => setCurrentAddress({ ...currentAddress, name: text })}
+            />
+            <Picker
+              selectedValue={selectedProvince}
+              onValueChange={(itemValue) => setSelectedProvince(itemValue)}
+              style={styles.picker}
+            >
+              <Picker.Item label="Chọn tỉnh/thành phố" value="" />
+              {provinces.map((province) => (
+                <Picker.Item key={province.code} label={province.name} value={province.code} />
+              ))}
+            </Picker>
+            <Picker
+              selectedValue={selectedDistrict}
+              onValueChange={(itemValue) => setSelectedDistrict(itemValue)}
+              style={styles.picker}
+              enabled={selectedProvince !== ''}
+            >
+              <Picker.Item label="Chọn quận/huyện" value="" />
+              {districts.map((district) => (
+                <Picker.Item key={district.code} label={district.name} value={district.code} />
+              ))}
+            </Picker>
+            <Picker
+              selectedValue={selectedWard}
+              onValueChange={(itemValue) => setSelectedWard(itemValue)}
+              style={styles.picker}
+              enabled={selectedDistrict !== ''}
+            >
+              <Picker.Item label="Chọn phường/xã" value="" />
+              {wards.map((ward) => (
+                <Picker.Item key={ward.code} label={ward.name} value={ward.code} />
+              ))}
+            </Picker>
+            <TextInput
+              style={styles.input}
+              placeholder="Số điện thoại (ví dụ: 0909123456)"
+              value={currentAddress.sdt}
+              onChangeText={(text) => setCurrentAddress({ ...currentAddress, sdt: text })}
+              keyboardType="phone-pad"
+            />
+            <View style={styles.checkboxContainer}>
+              <TouchableOpacity
+                onPress={() =>
+                  setCurrentAddress({ ...currentAddress, isDefault: !currentAddress.isDefault })
+                }
+                style={styles.checkbox}
               >
-                <Picker.Item label="Chọn tỉnh/thành phố" value="" />
-                {provinces.map((province) => (
-                  <Picker.Item key={province.code} label={province.name} value={province.code} />
-                ))}
-              </Picker>
-              <Picker
-                selectedValue={selectedDistrict}
-                onValueChange={(itemValue) => setSelectedDistrict(itemValue)}
-                style={styles.picker}
-                enabled={selectedProvince !== ''}
-              >
-                <Picker.Item label="Chọn quận/huyện" value="" />
-                {districts.map((district) => (
-                  <Picker.Item key={district.code} label={district.name} value={district.code} />
-                ))}
-              </Picker>
-              <Picker
-                selectedValue={selectedWard}
-                onValueChange={(itemValue) => setSelectedWard(itemValue)}
-                style={styles.picker}
-                enabled={selectedDistrict !== ''}
-              >
-                <Picker.Item label="Chọn phường/xã" value="" />
-                {wards.map((ward) => (
-                  <Picker.Item key={ward.code} label={ward.name} value={ward.code} />
-                ))}
-              </Picker>
-              <TouchableOpacity style={styles.mapButton} onPress={() => setMapMode(true)}>
-                <Text style={styles.mapButtonText}>Chọn trên bản đồ</Text>
-              </TouchableOpacity>
-              <TextInput
-                style={styles.input}
-                placeholder="Số điện thoại (ví dụ: 0909123456)"
-                value={currentAddress.sdt}
-                onChangeText={(text) => setCurrentAddress({ ...currentAddress, sdt: text })}
-                keyboardType="phone-pad"
-              />
-              <View style={styles.checkboxContainer}>
-                <TouchableOpacity
-                  onPress={() =>
-                    setCurrentAddress({ ...currentAddress, isDefault: !currentAddress.isDefault })
-                  }
-                  style={styles.checkbox}
-                >
-                  <Ionicons
-                    name={currentAddress.isDefault ? 'checkbox' : 'checkbox-outline'}
-                    size={20}
-                    color="#8B5A2B"
-                  />
-                  <Text style={styles.checkboxLabel}>Đặt làm địa chỉ mặc định</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton]}
-                  onPress={() => setModalVisible(false)}
-                >
-                  <Text style={styles.modalButtonText}>Hủy</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.confirmButton]}
-                  onPress={handleSaveAddress}
-                >
-                  <Text style={styles.modalButtonText}>{isEditMode ? 'Cập nhật' : 'Thêm'}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.fullScreenMapContainer}>
-              <View style={styles.mapHeader}>
-                <TouchableOpacity onPress={handleMapConfirm} style={styles.backButtonMap}>
-                  <Ionicons name="arrow-back" size={24} color="#fff" />
-                </TouchableOpacity>
-                <Text style={styles.mapTitle}>Chọn địa chỉ trên bản đồ</Text>
-                <TouchableOpacity onPress={refreshLocation} style={styles.refreshButton}>
-                  <Ionicons name="refresh" size={24} color="#fff" />
-                </TouchableOpacity>
-              </View>
-              <MapView
-                style={styles.fullScreenMap}
-                region={mapRegion}
-                onPress={onMapPress}
-                showsUserLocation={true}
-                followsUserLocation={true}
-                ref={mapRef}
-              >
-                {selectedLocation && (
-                  <Marker
-                    coordinate={selectedLocation}
-                    title="Vị trí được chọn"
-                  />
-                )}
-              </MapView>
-              <TouchableOpacity style={styles.confirmMapButton} onPress={handleMapConfirm}>
-                <Text style={styles.confirmMapButtonText}>Xác nhận vị trí</Text>
+                <Ionicons
+                  name={currentAddress.isDefault ? 'checkbox' : 'checkbox-outline'}
+                  size={20}
+                  color="#8B5A2B"
+                />
+                <Text style={styles.checkboxLabel}>Đặt làm địa chỉ mặc định</Text>
               </TouchableOpacity>
             </View>
-          )}
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.modalButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={handleSaveAddress}
+              >
+                <Text style={styles.modalButtonText}>{isEditMode ? 'Cập nhật' : 'Thêm'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
+      {/* Modal thông báo */}
+      <CustomModal
+        isVisible={notifVisible}
+        type={notifType}
+        title={notifTitle}
+        message={notifMessage}
+        onClose={() => setNotifVisible(false)}
+      />
     </ScrollView>
   );
 };
-
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#f0f2f5',marginTop: 30 },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },

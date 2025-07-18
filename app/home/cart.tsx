@@ -7,7 +7,9 @@ import { useProducts } from '../../store/useProducts';
 import AxiosInstance from '../../axiosInstance/AxiosInstance';
 import { router, useFocusEffect } from 'expo-router';
 import CustomModal from '../components/CustomModal';
+import { Ionicons } from '@expo/vector-icons';
 
+const emptyImg = require('../../assets/images/laughing.png');
 const Cart = () => {
   const { user } = useAuth();
   const { products } = useProducts();
@@ -179,13 +181,33 @@ const Cart = () => {
     );
   }
 
-  if (error) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>{error}</Text>
+if (error && !user?._id) {
+  return (
+    <View style={styles.authContainer}>
+      <Image source={emptyImg} style={styles.emptyImage} resizeMode="contain" />
+      <Text style={styles.authTitle}>Bạn chưa đăng nhập</Text>
+      <Text style={styles.authDesc}>Vui lòng đăng nhập để quản lý giỏ hàng và đặt hàng nhé!</Text>
+      <View style={styles.buttonRow}>
+        <TouchableOpacity
+          style={[styles.authBtn, styles.loginBtn]}
+          onPress={() => router.push('/login')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="log-in-outline" size={24} color="#fff" />
+          <Text style={styles.btnText}>Đăng nhập</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.authBtn, styles.backBtn]}
+          onPress={() => router.back()}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="arrow-back-outline" size={24} color="#fff" />
+          <Text style={styles.btnText}>Quay lại</Text>
+        </TouchableOpacity>
       </View>
-    );
-  }
+    </View>
+  );
+}
 
   return (
     <View style={styles.root}>
@@ -290,6 +312,62 @@ const Cart = () => {
 };
 
 const styles = StyleSheet.create({
+  authContainer: {
+  flex: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: '#f7f7f8',
+  paddingHorizontal: 24,
+  paddingBottom: 50,
+},
+emptyImage: {
+  width: 220,
+  height: 220,
+  marginBottom: 26,
+},
+authTitle: {
+  fontSize: 22,
+  fontWeight: '700',
+  color: '#22223b',
+  textAlign: 'center',
+  marginBottom: 8,
+  letterSpacing: 0.2,
+},
+authDesc: {
+  fontSize: 15,
+  color: '#60606e',
+  textAlign: 'center',
+  marginBottom: 30,
+},
+buttonRow: {
+  flexDirection: 'row',
+  gap: 20,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+authBtn: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingHorizontal: 24,
+  paddingVertical: 14,
+  borderRadius: 30,
+  marginHorizontal: 8,
+  elevation: 3,
+},
+loginBtn: {
+  backgroundColor: '#ee4d2d',
+},
+backBtn: {
+  backgroundColor: '#2d5fee',
+},
+btnText: {
+  color: '#fff',
+  fontWeight: '600',
+  fontSize: 16,
+  marginLeft: 8,
+  letterSpacing: 0.2,
+},
+
   root: {
     flex: 1,
     backgroundColor: '#f7f7f8',
