@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image,
-  TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput
+  TouchableOpacity, ActivityIndicator, TextInput
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
-import AxiosInstance1 from '../axiosInstance/AxiosInstances';
 import { useProducts } from '../store/useProducts';
-// Nếu bạn có hook user, thì import useAuth lấy user._id luôn cho chắc chắn:
 import { useAuth } from '../store/useAuth';
 import * as ImagePicker from 'expo-image-picker';
 import * as mime from 'react-native-mime-types'; 
+import Modal from 'react-native-modal';
+import { Ionicons as CustomModalIonicons } from '@expo/vector-icons';
+
 const PRIMARY = "#e4633b";
 const cancelReasonsList = [
   'Đặt nhầm sản phẩm',
@@ -22,6 +23,27 @@ const cancelReasonsList = [
   'Thời gian giao lâu',
   'Khác',
 ];
+const getPaymentLabel = (method: any) => {
+  if (!method) return 'Không rõ';
+  const lower = method.toLowerCase();
+  if (lower.includes('credit')) return 'Thẻ tín dụng';
+  if (lower.includes('zalo')) return 'ZaloPay';
+  if (lower.includes('momo')) return 'Momo';
+  if (lower.includes('vnpay')) return 'VNPay';
+  if (lower.includes('bank')) return 'Chuyển khoản ngân hàng';
+  if (lower.includes('cash')) return 'Tiền mặt';
+  return method;
+};
+const getPaymentIcon = (method : any) => {
+  if (!method) return 'help-circle-outline';
+  const lower = method.toLowerCase();
+  if (lower.includes('credit')) return 'card-outline';
+  if (lower.includes('zalo')) return 'logo-usd';
+  if (lower.includes('momo')) return 'logo-usd';
+  if (lower.includes('bank')) return 'swap-horizontal-outline';
+  if (lower.includes('cash')) return 'cash-outline';
+  return 'help-circle-outline';
+};
 
 const formatPrice = (price) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price || 0);
 const formatDate = (dateString) =>
@@ -55,31 +77,63 @@ const getStatusProps = (status) => {
   }
 };
 
+// CustomModal Component
+const CustomModal = ({
+  isVisible,
+  type,
+  title,
+  message,
+  onClose,
+  onConfirm,
+  showConfirmButton = false,
+}) => {
+  const iconName = type === 'success' ? 'checkmark-circle' : type === 'error' ? 'close-circle' : 'alert-circle';
+  const iconColor = type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#ffc107';
+
+  return (
+    <Modal isVisible={isVisible} onBackdropPress={onClose} animationIn="zoomIn" animationOut="zoomOut">
+      <View style={styles.modalContainer}>
+        <CustomModalIonicons name={iconName} size={50} color={iconColor} style={styles.icon} />
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.message}>{message}</Text>
+        <View style={styles.buttonContainer}>
+          {showConfirmButton && (
+            <TouchableOpacity style={[styles.button, styles.confirmButton]} onPress={onConfirm}>
+              <Text style={styles.buttonText}>Xác nhận</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={[styles.button, styles.closeButton]} onPress={onClose}>
+            <Text style={styles.buttonText}>Đóng</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 const OrderDetail = () => {
   const { orderId } = useLocalSearchParams();
   const { getProductById } = useProducts();
-  const { user } = useAuth(); // lấy user nếu đã đăng nhập
+  const { user } = useAuth();
   const [orderDetails, setOrderDetails] = useState([]);
   const [orderInfo, setOrderInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [reviewImages, setReviewImages] = useState([]);
-
-  // Modal huỷ đơn
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [otherReason, setOtherReason] = useState('');
   const [submittingCancel, setSubmittingCancel] = useState(false);
-
-  // Modal review sản phẩm
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
-  const [reviewProduct, setReviewProduct] = useState(null); // item đang được review
+  const [reviewProduct, setReviewProduct] = useState(null);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [sendingReview, setSendingReview] = useState(false);
-
-  // Đã review hay chưa? (simple, tuỳ vào BE, ở đây giả sử chưa có check, bạn nên fetch về để biết đã review hay chưa)
-  // Nếu BE trả về list review theo user + sản phẩm thì map vào đây là tốt nhất!
+  // State cho CustomModal
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalType, setModalType] = useState('success');
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
 
   useEffect(() => {
     const fetchOrderDetails = async () => {
@@ -89,7 +143,6 @@ const OrderDetail = () => {
           AxiosInstance().get(`/orderdetail/order/${orderId}`),
           AxiosInstance().get(`/order/${orderId}`)
         ]);
-        // mapping product info
         const enrichedDetails = (Array.isArray(detailsRes) ? detailsRes : []).map(detail => {
           const productId = detail?.variantID?.productID;
           const product = productId ? getProductById(productId) : {};
@@ -107,7 +160,7 @@ const OrderDetail = () => {
           };
         });
         setOrderDetails(enrichedDetails);
-        setOrderInfo(orderRes); // API trả về object đơn hàng
+        setOrderInfo(orderRes);
         setError(null);
       } catch (err) {
         setError('Không thể tải chi tiết đơn hàng. Vui lòng thử lại sau.');
@@ -124,15 +177,18 @@ const OrderDetail = () => {
     }
   }, [orderId, getProductById]);
 
-  // Huỷ đơn
   const openCancelModal = () => {
     setCancelModalVisible(true);
     setCancelReason('');
     setOtherReason('');
   };
+
   const submitCancelOrder = async () => {
     if (!cancelReason || (cancelReason === 'Khác' && !otherReason.trim())) {
-      Alert.alert('Vui lòng chọn hoặc nhập lý do huỷ!');
+      setModalType('error');
+      setModalTitle('Lỗi');
+      setModalMessage('Vui lòng chọn hoặc nhập lý do huỷ!');
+      setModalVisible(true);
       return;
     }
     setSubmittingCancel(true);
@@ -142,17 +198,22 @@ const OrderDetail = () => {
         orderStatus: "cancelled",
         cancelReason: reasonText
       });
-      Alert.alert("Thông báo", "Đã hủy đơn hàng thành công");
+      setModalType('success');
+      setModalTitle('Thông báo');
+      setModalMessage('Đã hủy đơn hàng thành công');
+      setModalVisible(true);
       setOrderInfo(prev => ({ ...prev, orderStatus: 'cancelled' }));
       setCancelModalVisible(false);
     } catch (error) {
-      Alert.alert("Lỗi", error?.response?.data?.message || "Không thể hủy đơn hàng.");
+      setModalType('error');
+      setModalTitle('Lỗi');
+      setModalMessage(error?.response?.data?.message || 'Không thể hủy đơn hàng.');
+      setModalVisible(true);
     } finally {
       setSubmittingCancel(false);
     }
   };
 
-  // Mở modal review
   const openReviewModal = (product) => {
     setReviewProduct(product);
     setReviewRating(5);
@@ -160,73 +221,81 @@ const OrderDetail = () => {
     setReviewModalVisible(true);
   };
 
-  // Gửi review sản phẩm
-const handleSendReview = async () => {
-  const userID = user?._id || orderInfo?.userID;
+  const handleSendReview = async () => {
+    const userID = user?._id || orderInfo?.userID;
 
-  if (!userID || !reviewProduct) {
-    Alert.alert('Bạn cần đăng nhập!');
-    return;
-  }
-
-  if (!reviewComment.trim()) {
-    Alert.alert('Vui lòng nhập nội dung đánh giá!');
-    return;
-  }
-
-  setSendingReview(true);
-
-  try {
-    const formData = new FormData();
-    formData.append('userID', userID);
-    formData.append('productID', reviewProduct.variantID.productID);
-    formData.append('rating', String(reviewRating));
-    formData.append('comment', reviewComment.trim());
-    formData.append('status', 'true');
-
-    reviewImages.forEach((uri, index) => {
-      const filename = uri.split('/').pop() || `image_${index}.jpg`;
-      const ext = filename.split('.').pop()?.toLowerCase();
-      const mime = ext === 'jpg' || ext === 'jpeg'
-        ? 'image/jpeg'
-        : ext === 'png'
-        ? 'image/png'
-        : 'application/octet-stream';
-
-      formData.append('images', {
-        uri,
-        name: filename,
-        type: mime,
-      });
-    });
-
-    const res = await fetch('https://datn-sever.onrender.com/review', {
-      method: 'POST',
-      body: formData,
-      headers: {
-        Accept: 'application/json',
-      },
-    });
-
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Lỗi không xác định');
+    if (!userID || !reviewProduct) {
+      setModalType('error');
+      setModalTitle('Lỗi');
+      setModalMessage('Bạn cần đăng nhập!');
+      setModalVisible(true);
+      return;
     }
 
-    Alert.alert('✅ Thành công', 'Đánh giá đã gửi thành công!');
-    setReviewModalVisible(false);
-    setReviewImages([]);
-    setReviewComment('');
-  } catch (err) {
-    console.error('❌ Lỗi gửi review:', err);
-    Alert.alert('Lỗi', err?.message || 'Không gửi được đánh giá');
-  }
+    if (!reviewComment.trim()) {
+      setModalType('error');
+      setModalTitle('Lỗi');
+      setModalMessage('Vui lòng nhập nội dung đánh giá!');
+      setModalVisible(true);
+      return;
+    }
 
-  setSendingReview(false);
-};
+    setSendingReview(true);
 
+    try {
+      const formData = new FormData();
+      formData.append('userID', userID);
+      formData.append('productID', reviewProduct.variantID.productID);
+      formData.append('rating', String(reviewRating));
+      formData.append('comment', reviewComment.trim());
+      formData.append('status', 'true');
 
+      reviewImages.forEach((uri, index) => {
+        const filename = uri.split('/').pop() || `image_${index}.jpg`;
+        const ext = filename.split('.').pop()?.toLowerCase();
+        const mimeType = ext === 'jpg' || ext === 'jpeg'
+          ? 'image/jpeg'
+          : ext === 'png'
+          ? 'image/png'
+          : 'application/octet-stream';
 
+        formData.append('images', {
+          uri,
+          name: filename,
+          type: mimeType,
+        });
+      });
+
+      const res = await fetch('https://datn-sever.onrender.com/review', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Lỗi không xác định');
+      }
+
+      setModalType('success');
+      setModalTitle('Thành công');
+      setModalMessage('Đánh giá đã gửi thành công!');
+      setModalVisible(true);
+      setReviewModalVisible(false);
+      setReviewImages([]);
+      setReviewComment('');
+    } catch (err) {
+      console.error('❌ Lỗi gửi review:', err);
+      setModalType('error');
+      setModalTitle('Lỗi');
+      setModalMessage(err?.message || 'Không gửi được đánh giá');
+      setModalVisible(true);
+    }
+
+    setSendingReview(false);
+  };
 
   const goBack = () => router.back();
   const calcTotal = () => orderDetails.reduce((sum, d) => sum + (d.price * d.quantity), 0);
@@ -255,7 +324,6 @@ const handleSendReview = async () => {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={goBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -263,7 +331,6 @@ const handleSendReview = async () => {
         <Text style={styles.title}>Chi tiết đơn hàng</Text>
         <View style={{ width: 24 }} />
       </View>
-      {/* Status + info */}
       <View style={styles.statusCard}>
         <MaterialCommunityIcons name={statusProps.icon} size={30} color={statusProps.color} style={{ marginRight: 12 }} />
         <View>
@@ -271,17 +338,15 @@ const handleSendReview = async () => {
           <Text style={{ color: "#888", fontSize: 13, marginTop: 3 }}>Ngày đặt: {formatDate(orderInfo.createdAt)}</Text>
         </View>
       </View>
-      {/* Thông tin người nhận */}
       <View style={styles.infoCard}>
         <Text style={styles.infoLabel}>Khách nhận hàng</Text>
         <Text style={styles.infoValue}><Ionicons name="person" size={16} /> {orderInfo.name} | {orderInfo.sdt}</Text>
         <Text style={styles.infoValue}><Ionicons name="location" size={16} /> {orderInfo.shippingAddress}</Text>
         <Text style={styles.infoLabel}>Phương thức thanh toán</Text>
         <Text style={styles.infoValue}>
-          {orderInfo.paymentID?.paymentMethod === 'Credit Card' ? 'Thẻ tín dụng' : 'Tiền mặt'}
+          {getPaymentLabel(orderInfo.paymentID?.paymentMethod)}
         </Text>
       </View>
-      {/* Danh sách sản phẩm */}
       <View style={styles.productList}>
         <Text style={styles.sectionTitle}>Sản phẩm ({orderDetails.length})</Text>
         {orderDetails.map((detail) => (
@@ -299,7 +364,6 @@ const handleSendReview = async () => {
               <Text style={styles.productDetail}>Màu sắc: <Text style={styles.attrValue}>{detail.variantID.color}</Text></Text>
               <Text style={styles.productDetail}>Số lượng: <Text style={styles.attrValue}>{detail.quantity}</Text></Text>
               <Text style={styles.productDetail}>Giá: <Text style={styles.productPrice}>{formatPrice(detail.price)}</Text></Text>
-              {/* Nút đánh giá khi đã giao (delivered) */}
               {orderInfo.orderStatus === 'delivered' && (
                 <TouchableOpacity
                   style={{
@@ -317,7 +381,6 @@ const handleSendReview = async () => {
           </View>
         ))}
       </View>
-      {/* Tổng tiền + voucher + giảm giá + thực trả */}
       <View style={styles.summaryCard}>
         <Text style={styles.sectionTitle}>Tổng cộng</Text>
         <View style={styles.summaryRow}>
@@ -353,12 +416,16 @@ const handleSendReview = async () => {
         <View style={styles.summaryRow}>
           <Text style={styles.label}>Thanh toán:</Text>
           <Text style={styles.value}>
-            {orderInfo.paymentID?.paymentMethod === 'Credit Card' ? 'Thẻ tín dụng' : 'Tiền mặt'}
+            {getPaymentLabel(orderInfo.paymentID?.paymentMethod)}
           </Text>
         </View>
       </View>
-      {/* Nút liên hệ + huỷ đơn */}
-      <TouchableOpacity style={styles.contactBtn} onPress={() => Alert.alert("Liên hệ shop", "SĐT: 0123456789")}>
+      <TouchableOpacity style={styles.contactBtn} onPress={() => {
+        setModalType('info');
+        setModalTitle('Liên hệ shop');
+        setModalMessage('SĐT: 0123456789');
+        setModalVisible(true);
+      }}>
         <Ionicons name="call" size={20} color="#fff" style={{ marginRight: 7 }} />
         <Text style={styles.contactText}>Liên hệ shop</Text>
       </TouchableOpacity>
@@ -371,7 +438,6 @@ const handleSendReview = async () => {
           <Text style={styles.contactText}>Huỷ đơn hàng</Text>
         </TouchableOpacity>
       )}
-      {/* Modal huỷ đơn */}
       <Modal
         visible={cancelModalVisible}
         transparent
@@ -446,7 +512,6 @@ const handleSendReview = async () => {
           </View>
         </View>
       </Modal>
-      {/* Modal review sản phẩm */}
       <Modal
         visible={reviewModalVisible}
         transparent
@@ -486,39 +551,41 @@ const handleSendReview = async () => {
               onChangeText={setReviewComment}
               multiline
             />
-            {/* Ảnh đã chọn + nút thêm ảnh */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, width: '100%' }}>
-                {reviewImages.map((uri, idx) => (
-                  <Image
-                    key={idx}
-                    source={{ uri }}
-                    style={{ width: 60, height: 60, marginRight: 8, marginBottom: 8, borderRadius: 8 }}
-                  />
-                ))}
-                <TouchableOpacity
-                  onPress={async () => {
-                    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                    if (!permission.granted) {
-                      Alert.alert("Quyền bị từ chối", "Ứng dụng cần quyền truy cập thư viện ảnh.");
-                      return;
-                    }
-                    const result = await ImagePicker.launchImageLibraryAsync({
-                      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                      allowsMultipleSelection: true,
-                      quality: 0.7,
-                    });
-                    if (!result.canceled) {
-                      setReviewImages(prev => [...prev, ...result.assets.map(asset => asset.uri)]);
-                    }
-                  }}
-                  style={{
-                    width: 60, height: 60, borderRadius: 8, backgroundColor: "#eee",
-                    alignItems: 'center', justifyContent: 'center'
-                  }}
-                >
-                  <Ionicons name="camera" size={24} color="#888" />
-                </TouchableOpacity>
-              </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, width: '100%' }}>
+              {reviewImages.map((uri, idx) => (
+                <Image
+                  key={idx}
+                  source={{ uri }}
+                  style={{ width: 60, height: 60, marginRight: 8, marginBottom: 8, borderRadius: 8 }}
+                />
+              ))}
+              <TouchableOpacity
+                onPress={async () => {
+                  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                  if (!permission.granted) {
+                    setModalType('error');
+                    setModalTitle('Lỗi');
+                    setModalMessage('Ứng dụng cần quyền truy cập thư viện ảnh.');
+                    setModalVisible(true);
+                    return;
+                  }
+                  const result = await ImagePicker.launchImageLibraryAsync({
+                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                    allowsMultipleSelection: true,
+                    quality: 0.7,
+                  });
+                  if (!result.canceled) {
+                    setReviewImages(prev => [...prev, ...result.assets.map(asset => asset.uri)]);
+                  }
+                }}
+                style={{
+                  width: 60, height: 60, borderRadius: 8, backgroundColor: "#eee",
+                  alignItems: 'center', justifyContent: 'center'
+                }}
+              >
+                <Ionicons name="camera" size={24} color="#888" />
+              </TouchableOpacity>
+            </View>
             <View style={{ flexDirection: 'row', marginTop: 16, width: '100%' }}>
               <TouchableOpacity
                 style={{
@@ -547,13 +614,20 @@ const handleSendReview = async () => {
           </View>
         </View>
       </Modal>
+      <CustomModal
+        isVisible={modalVisible}
+        type={modalType}
+        title={modalTitle}
+        message={modalMessage}
+        onClose={() => setModalVisible(false)}
+      />
       <View style={{ height: 40 }} />
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FA', marginTop: 30 },
+  container: { flex: 1, marginTop: 30 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: "#8B5A2B", paddingVertical: 16, paddingHorizontal: 14, marginBottom: 10,
@@ -602,8 +676,51 @@ const styles = StyleSheet.create({
     backgroundColor: '#e4633b', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 20, marginTop: 14,
   },
   retryButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
-  emptyContainer: { alignItems: 'center', marginTop: 40 },
-  emptyText: { fontSize: 16, color: '#666', textAlign: 'center', marginTop: 12 },
+  modalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 20,
+    alignItems: 'center',
+    marginHorizontal: 20,
+  },
+  icon: {
+    marginBottom: 15,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  message: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+  },
+  button: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  confirmButton: {
+    backgroundColor: '#28a745',
+  },
+  closeButton: {
+    backgroundColor: '#dc3545',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
 
 export default OrderDetail;

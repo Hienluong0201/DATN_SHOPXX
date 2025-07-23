@@ -1,18 +1,18 @@
 import { router } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { Animated, Easing, StyleSheet, View, ImageBackground } from 'react-native';
 
-// Đường dẫn ảnh logo bạn cần thay đúng với đường dẫn ảnh của bạn
 const logoImage = require('../assets/images/logo.png');
 
-export default function SplashScreen() {
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;  // khởi đầu scale nhỏ hơn
-  const opacityAnim = useRef(new Animated.Value(0)).current;  // khởi đầu mờ
+// Đổi link này sang link ảnh bạn muốn
+const bgImage = { uri: 'https://www.vietnamworks.com/hrinsider/wp-content/uploads/2023/12/mot-chiec-hinh-nen-vua-dang-yeu-vua-huyen-ao-cho-ban-nu.jpg' };
 
-  const colorAnim = useRef(new Animated.Value(0)).current;  // cho text đổi màu
+export default function SplashScreen() {
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const colorAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Chuỗi animation cho logo: scale từ 0.8 -> 1.2 -> 1 và opacity từ 0->1
     Animated.sequence([
       Animated.parallel([
         Animated.timing(scaleAnim, {
@@ -35,7 +35,6 @@ export default function SplashScreen() {
       }),
     ]).start();
 
-    // Animation đổi màu text lặp lại
     Animated.loop(
       Animated.sequence([
         Animated.timing(colorAnim, {
@@ -58,38 +57,46 @@ export default function SplashScreen() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Nội suy màu text từ trắng sang vàng rồi trở lại trắng
   const textColor = colorAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#ffffff', '#ffd700'], // trắng -> vàng kim
+    outputRange: ['#ffffff', '#ffd700'],
   });
 
   return (
-    <View style={styles.container}>
-      <Animated.Image
-        source={logoImage}
-        style={[
-          styles.logo,
-          {
-            transform: [{ scale: scaleAnim }],
-            opacity: opacityAnim,
-          },
-        ]}
-        resizeMode="contain"
-      />
-      <Animated.Text style={[styles.text, { color: textColor }]}>
-        Chào mừng bạn đến với Shop!
-      </Animated.Text>
-    </View>
+    <ImageBackground source={bgImage} style={styles.bg} resizeMode="cover">
+      <View style={styles.overlay} />
+      <View style={styles.centerContent}>
+        <Animated.Image
+          source={logoImage}
+          style={[
+            styles.logo,
+            {
+              transform: [{ scale: scaleAnim }],
+              opacity: opacityAnim,
+            },
+          ]}
+          resizeMode="contain"
+        />
+      </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  bg: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(26,26,26,0.35)', // overlay mờ cho nổi logo/text, chỉnh lại nếu muốn đậm/nhạt
+  },
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
   },
   logo: {
     width: 180,

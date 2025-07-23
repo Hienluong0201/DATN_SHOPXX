@@ -52,8 +52,9 @@ const sendReviewAPI = async ({ userID, productID, rating, comment }) => {
 };
 
 const ProductDetail = () => {
-  const { productId } = useLocalSearchParams();
-  const { getProductById, addToCart, fetchProductVariants, loading, error } = useProducts();
+const { productId } = useLocalSearchParams();
+const id = Array.isArray(productId) ? productId[0] : productId;
+const { getProductById, addToCart, fetchProductVariants, loading, error } = useProducts()
   const [product, setProduct] = useState(null);
   const [variants, setVariants] = useState([]);
   const [selectedVariant, setSelectedVariant] = useState(null);
@@ -63,11 +64,7 @@ const ProductDetail = () => {
   const [reviews, setReviews] = useState([]);
   const [reviewTab, setReviewTab] = useState(0);
   const { width } = useWindowDimensions();
-  // Review form state
-  const [reviewComment, setReviewComment] = useState('');
-  const [reviewRating, setReviewRating] = useState(5);
-  const [sendingReview, setSendingReview] = useState(false);
-
+ 
   // State để quản lý CustomModal
   const [modalVisible, setModalVisible] = useState(false);
   const [modalConfig, setModalConfig] = useState({
@@ -97,32 +94,28 @@ const ProductDetail = () => {
   };
 
   // Lấy dữ liệu sản phẩm, biến thể, review
-    const loadData = useCallback(async () => {
-      if (!productId || typeof productId !== 'string' || isDataLoaded) return;
-      setIsDataLoaded(false);
-      try {
-        const fetchedProduct = getProductById(productId);
-        console.log("Ảnh sản phẩm:", fetchedProduct?.Images || fetchedProduct?.images);
-        const fetchedVariants = await fetchProductVariants(productId);
-
-        // Gọi API lấy review
-        let reviewData = [];
-        try {
-          reviewData = await AxiosInstance().get(`/review/product/${productId}`);
-          // console.log("du lieu anh " , reviewData)
-          setReviews(reviewData || []);
-        } catch (err) {
-          setReviews([]);
-        }
-
-        setProduct(fetchedProduct || null);
-        setVariants(fetchedVariants || []);
-        setSelectedVariant(fetchedVariants.length ? fetchedVariants[0] : null);
-        setIsDataLoaded(true);
-      } catch (err) {
-        setIsDataLoaded(true);
-      }
-    }, [productId, getProductById, fetchProductVariants, isDataLoaded]);
+  const loadData = useCallback(async () => {
+  if (!id || typeof id !== 'string' || isDataLoaded) return;
+  setIsDataLoaded(false);
+  try {
+    // Ví dụ fetch API sản phẩm detail
+    const fetchedProduct = getProductById ? getProductById(id) : null;
+    const fetchedVariants = await fetchProductVariants(id);
+    let reviewData = [];
+    try {
+      reviewData = await AxiosInstance().get(`/review/product/${id}`);
+      setReviews(reviewData || []);
+    } catch (err) {
+      setReviews([]);
+    }
+    setProduct(fetchedProduct || null);
+    setVariants(fetchedVariants || []);
+    setSelectedVariant(fetchedVariants.length ? fetchedVariants[0] : null);
+    setIsDataLoaded(true);
+  } catch (err) {
+    setIsDataLoaded(true);
+  }
+}, [id, getProductById, fetchProductVariants, isDataLoaded]);
 
   // Reload lại data sau khi gửi review thành công
   const reloadReview = async () => {
@@ -194,34 +187,6 @@ const ProductDetail = () => {
       showModal('warning', 'Thông báo', 'Vui lòng chọn màu và kích thước!');
     }
   }, [product, selectedVariant, quantity, user]);
-
-  // Gửi review
-  const handleSendReview = async () => {
-    if (!user || !user._id) {
-      showModal('warning', 'Thông báo', 'Bạn cần đăng nhập để đánh giá!');
-      return;
-    }
-    if (!reviewComment.trim()) {
-      showModal('warning', 'Thông báo', 'Vui lòng nhập nội dung đánh giá!');
-      return;
-    }
-    setSendingReview(true);
-    try {
-      await sendReviewAPI({
-        userID: user._id,
-        productID: productId,
-        rating: reviewRating,
-        comment: reviewComment.trim(),
-      });
-      showModal('success', 'Thành công', 'Đánh giá đã gửi thành công!');
-      setReviewComment('');
-      setReviewRating(5);
-      reloadReview();
-    } catch (err) {
-      showModal('error', 'Lỗi', err?.message || 'Không gửi được đánh giá.');
-    }
-    setSendingReview(false);
-  };
 
   // UI
   if (!isDataLoaded || loading) {

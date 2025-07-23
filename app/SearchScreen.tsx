@@ -1,22 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState,useRef } from 'react';
 import { View, TextInput, StyleSheet, FlatList, Text, Image, TouchableOpacity, Alert } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
-import { useProducts } from '../store/useProducts'; // Điều chỉnh đường dẫn nếu cần
-import { useAuth } from '../store/useAuth'; // Điều chỉnh đường dẫn nếu cần
+import { useProducts } from '../store/useProducts';
+import { useAuth } from '../store/useAuth';
 import { router } from 'expo-router';
-import AxiosInstance from '../axiosInstance/AxiosInstance'; // Import AxiosInstance
+import AxiosInstance from '../axiosInstance/AxiosInstance';
+
+// CHỈ IMPORT LinearGradient từ expo-linear-gradient (KHÔNG import react-native-linear-gradient!)
+import { LinearGradient } from 'expo-linear-gradient';
+import ShimmerPlaceHolder from 'react-native-shimmer-placeholder';
 
 export default function SearchScreen() {
   const { addToWishlist, removeFromWishlist, isInWishlist, getWishlistId } = useProducts();
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
   const [hasMore, setHasMore] = useState(true);
-
-  const fetchProducts = async (query: string, pageNum: number, reset: boolean = false) => {
+  const debounceTimer = useRef(null);
+  const fetchProducts = async (query, pageNum, reset = false) => {
     setLoading(true);
     setError(null);
     try {
@@ -24,31 +28,20 @@ export default function SearchScreen() {
       if (query) {
         queryString += `&name=${encodeURIComponent(query)}`;
       }
-      console.log('API Query:', queryString); // Log URL API được gọi
-
       const productResponse = await AxiosInstance().get(queryString);
-      console.log('API Response:', productResponse); // Log toàn bộ phản hồi API
-
       const fetchedProducts = await Promise.all(
-        (productResponse.products || []).map(async (product: any) => {
+        (productResponse.products || []).map(async (product) => {
           if (!product._id) return null;
           let imageURLs = ['https://via.placeholder.com/150'];
           let rating = 5;
           try {
             const imageResponse = await AxiosInstance().get(`/img?productID=${product._id}`);
-            console.log(`Image Response for ${product._id}:`, imageResponse); // Log phản hồi hình ảnh
             imageURLs = imageResponse[0]?.imageURL || imageURLs;
-          } catch (imgErr) {
-            console.log(`Image Error for ${product._id}:`, imgErr); // Log lỗi hình ảnh
-          }
+          } catch {}
           try {
             const ratingResponse = await AxiosInstance().get(`/review/product/${product._id}/average-rating`);
-            console.log(`Rating Response for ${product._id}:`, ratingResponse); // Log phản hồi rating
             rating = ratingResponse.averageRating || 0;
-          } catch (rateErr) {
-            console.log(`Rating Error for ${product._id}:`, rateErr); // Log lỗi rating
-          }
-
+          } catch {}
           return {
             ProductID: product._id,
             CategoryID: product.categoryID || '',
@@ -60,13 +53,10 @@ export default function SearchScreen() {
           };
         })
       );
-
       const validProducts = fetchedProducts.filter(p => p !== null);
-      console.log('Valid Products:', validProducts); // Log danh sách sản phẩm sau xử lý
       setProducts(prev => reset ? validProducts : [...prev, ...validProducts]);
       setHasMore(validProducts.length >= 10);
     } catch (err) {
-      console.log('Fetch Products Error:', err); // Log lỗi API
       setError('Không thể tải sản phẩm. Vui lòng thử lại.');
       Alert.alert('Lỗi', 'Không thể tải sản phẩm.');
     } finally {
@@ -74,13 +64,19 @@ export default function SearchScreen() {
     }
   };
 
-  const handleSearch = (query: string) => {
-    console.log('Search Query:', query); // Log từ khóa tìm kiếm
+  const handleSearch = (query) => {
     setSearchQuery(query);
     setPage(1);
+
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+
     if (query.length > 0) {
-      fetchProducts(query, 1, true);
-    } else if (query.length === 0) {
+      debounceTimer.current = setTimeout(() => {
+        fetchProducts(query, 1, true);
+      }, 1000); // 2 giây
+    } else {
       setProducts([]);
     }
   };
@@ -88,13 +84,12 @@ export default function SearchScreen() {
   const loadMoreProducts = () => {
     if (!loading && hasMore) {
       const nextPage = page + 1;
-      console.log('Loading More, Page:', nextPage); // Log trang tải thêm
       setPage(nextPage);
       fetchProducts(searchQuery, nextPage);
     }
   };
 
-  const handleToggleWishlist = (product: any) => {
+  const handleToggleWishlist = (product) => {
     if (!user?._id) {
       Alert.alert('Lỗi', 'Vui lòng đăng nhập để thêm vào danh sách yêu thích.');
       return;
@@ -107,20 +102,30 @@ export default function SearchScreen() {
     }
   };
 
-  const navigateToProductDetail = (productId: string) =>
+  const navigateToProductDetail = (productId) =>
     router.push({ pathname: './productDetail', params: { productId } });
 
+  // Skeleton loading với shimmer
   const renderSkeletonItem = () => (
     <View style={styles.productCard}>
-      <View style={[styles.productImage, styles.skeletonImage]} />
+      <ShimmerPlaceHolder
+        LinearGradient={LinearGradient}
+        style={[styles.productImage, styles.skeletonImage]}
+      />
       <View style={styles.productInfo}>
-        <View style={[styles.skeletonText, { width: '80%', height: 14, marginBottom: 5 }]} />
-        <View style={[styles.skeletonText, { width: '60%', height: 14 }]} />
+        <ShimmerPlaceHolder
+          LinearGradient={LinearGradient}
+          style={[styles.skeletonText, { width: '80%', height: 14, marginBottom: 5 }]}
+        />
+        <ShimmerPlaceHolder
+          LinearGradient={LinearGradient}
+          style={[styles.skeletonText, { width: '60%', height: 14 }]}
+        />
       </View>
     </View>
   );
 
-  const renderProduct = ({ item }: any) => (
+  const renderProduct = ({ item }) => (
     <TouchableOpacity
       style={styles.productCard}
       onPress={() => navigateToProductDetail(item.ProductID)}
@@ -151,6 +156,33 @@ export default function SearchScreen() {
     </TouchableOpacity>
   );
 
+  // Khi đang loading lần đầu (page 1), hiện skeleton
+  if (loading && page === 1) {
+  // Render skeleton như 2 cột luôn
+  return (
+    <View style={styles.container}>
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Tìm kiếm sản phẩm..."
+          placeholderTextColor="#999"
+          value={searchQuery}
+          onChangeText={handleSearch}
+          autoFocus={true}
+        />
+        <MaterialIcons name="search" size={24} color="#8B4513" style={styles.searchIcon} />
+      </View>
+      <FlatList
+        data={Array.from({ length: 8 })} // ví dụ 8 skeleton
+        renderItem={renderSkeletonItem}
+        keyExtractor={(_, i) => `skeleton-${i}`}
+        numColumns={2}
+        contentContainerStyle={styles.listContent}
+      />
+    </View>
+  );
+}
+
   return (
     <View style={styles.container}>
       <View style={styles.searchContainer}>
@@ -166,12 +198,6 @@ export default function SearchScreen() {
       </View>
       {error ? (
         <Text style={styles.errorText}>{error}</Text>
-      ) : loading && page === 1 ? (
-        <View style={styles.gridContainer}>
-          {[...Array(4)].map((_, index) => (
-            <View key={`skeleton-${index}`}>{renderSkeletonItem()}</View>
-          ))}
-        </View>
       ) : products.length === 0 && searchQuery ? (
         <Text style={styles.noResultsText}>Không tìm thấy sản phẩm nào.</Text>
       ) : (
@@ -181,9 +207,22 @@ export default function SearchScreen() {
           keyExtractor={(item) => item.ProductID}
           contentContainerStyle={styles.listContent}
           numColumns={2}
-          ListFooterComponent={
-            hasMore && !loading ? (
-              <TouchableOpacity style={styles.loadMoreButton} onPress={loadMoreProducts}>
+         ListFooterComponent={
+            loading && page > 1 ? (
+              <FlatList
+                data={Array.from({ length: 4 })}
+                renderItem={renderSkeletonItem}
+                keyExtractor={(_, i) => `skeleton-more-${i}`}
+                numColumns={2}
+                contentContainerStyle={styles.listContent}
+                scrollEnabled={false}
+              />
+            ) : hasMore ? (
+              <TouchableOpacity
+                style={[styles.loadMoreButton, loading && { opacity: 0.5 }]}
+                onPress={loadMoreProducts}
+                disabled={loading}
+              >
                 <Text style={styles.loadMoreText}>Tải thêm</Text>
               </TouchableOpacity>
             ) : null

@@ -73,6 +73,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 50,
     height: 50,
+    bottom: 5,
   },
   focusedIconContainer: {
     backgroundColor: '#fff',

@@ -170,27 +170,32 @@ const fetchProducts = async ({ categoryId, page = 1, limit = 10 }) => {
     const query = categoryId === 'all'
       ? `/products?page=${page}&limit=${limit}`
       : `/products?categoryID=${categoryId}&page=${page}&limit=${limit}`;
-    
+
     const productResponse = await AxiosInstance().get(query);
-    const fetchedProducts = (productResponse.products || []).map((product) => {
-      if (!product._id) return null;
+    const fetchedProducts = (productResponse.products || [])
+      // LỌC status là true (nếu trường status tồn tại, hoặc bạn muốn mặc định true)
+      .filter((product) => product.status === true)
+      .map((product) => {
+        if (!product._id) return null;
 
-      // 🖼️ Load ảnh trực tiếp từ product.images
-      const imageURLs = Array.isArray(product.images) && product.images.length > 0 
-        ? product.images 
-        : ['https://via.placeholder.com/150'];
+        // 🖼️ Load ảnh trực tiếp từ product.images
+        const imageURLs = Array.isArray(product.images) && product.images.length > 0
+          ? product.images
+          : ['https://via.placeholder.com/150'];
 
-      return {
-        ProductID: product._id,
-        CategoryID: product.categoryID || '',
-        Name: product.name,
-        Description: product.description || '',
-        Price: product.price.toLocaleString('vi-VN'),
-        Image: imageURLs[0],
-        Images: imageURLs,
-        Rating: product.averageRating || 0, // ✅ Dùng luôn từ API chính
-      };
-    });
+        // Giữ nguyên các trường, BỔ SUNG videos nếu BE đã trả về
+        return {
+          ProductID: product._id,
+          CategoryID: product.categoryID || '',
+          Name: product.name,
+          Description: product.description || '',
+          Price: product.price.toLocaleString('vi-VN'),
+          Image: imageURLs[0],
+          Images: imageURLs,
+          Videos: product.videos || [],         // <--- GIỮ TRƯỜNG VIDEOS
+          Rating: product.averageRating || 0,
+        };
+      });
 
     const validProducts = fetchedProducts.filter((p) => p !== null);
     setProducts((prev) => page === 1 ? validProducts : [...prev, ...validProducts]);
@@ -203,20 +208,33 @@ const fetchProducts = async ({ categoryId, page = 1, limit = 10 }) => {
   }
 };
 
+
   const getIconForCategory = (name: string) => {
-    switch (name) {
-      case 'Áo Khoác':
-      case 'Áo Polo':
-      case 'Áo Thun':
-      case 'Áo Sơ Mi':
-        return 'shirt';
-      case 'Quần Dài':
-      case 'Quần Đùi':
-        return 'person';
-      default:
-        return 'cube';
-    }
-  };
+  switch (name) {
+    case 'Áo Khoác':
+      return require('../assets/images/jacket.png');
+    case 'Áo Polo':
+      return require('../assets/images/polo-shirt.png');
+    case 'Áo Thun':
+    case 'T-Shirt':
+    case 'tshirt':
+      return require('../assets/images/tshirt.png');
+    case 'Áo Sơ Mi':
+    case 'Shirt':
+    case 'shirt':
+      return require('../assets/images/shirt.png');
+    case 'Áo Khác':
+      return require('../assets/images/shirt_khac.png');
+    case 'Quần Dài':
+    case 'Quần Tây':
+      return require('../assets/images/trouser.png');
+    case 'Quần Đùi':
+    case 'Shorts':
+      return require('../assets/images/shorts.png');
+    default:
+      return require('../assets/images/shirt_khac.png'); // hoặc ảnh mặc định bạn thích
+  }
+};
 
   const getProductById = (id: string) => products.find((p) => p.ProductID === id);
 

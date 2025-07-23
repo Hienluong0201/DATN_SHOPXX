@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import ShimmerPlaceHolder from 'react-native-shimmer-placeholder';
 
 export default function AdvancedFilterScreen() {
   const [products, setProducts] = useState([]);
@@ -29,13 +30,18 @@ export default function AdvancedFilterScreen() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const [isSearched, setIsSearched] = useState(false); // Chỉ render sản phẩm khi bấm tìm kiếm
   const router = useRouter();
   const LIMIT = 10;
 
   const fetchCategories = async () => {
-    const res = await fetch(`https://datn-sever.onrender.com/category?status=true`);
-    const data = await res.json();
-    setCategories(data);
+    try {
+      const res = await fetch(`https://datn-sever.onrender.com/category?status=true`);
+      const data = await res.json();
+      setCategories(data);
+    } catch (err) {
+      setCategories([]);
+    }
   };
 
   const fetchProducts = async (pageNumber = 1, isLoadMore = false) => {
@@ -70,19 +76,20 @@ export default function AdvancedFilterScreen() {
 
       setHasMore(newProducts.length === LIMIT);
     } catch (error) {
-      console.error('Fetch products error:', error);
-    } 
+      setProducts([]);
+    }
     setLoading(false);
     setIsFetchingMore(false);
   };
 
   useEffect(() => {
     fetchCategories();
-    fetchProducts(1, false);
+    // Không fetch products khi vào màn này, chỉ fetch khi bấm lọc
   }, []);
 
   const handleApplyFilter = () => {
     setPage(1);
+    setIsSearched(true);
     fetchProducts(1, false);
   };
 
@@ -94,6 +101,42 @@ export default function AdvancedFilterScreen() {
     }
   };
 
+  // Skeleton shimmer cho grid sản phẩm
+  const renderSkeletonGrid = () => (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 8 }}>
+      {Array.from({ length: 6 }).map((_, idx) => (
+        <View
+          key={idx}
+          style={{
+            width: '48%',
+            marginBottom: 12,
+            marginRight: idx % 2 === 0 ? '4%' : 0,
+            backgroundColor: '#fff',
+            borderRadius: 12,
+            padding: 10,
+          }}
+        >
+          <ShimmerPlaceHolder
+            LinearGradient={LinearGradient}
+            style={{ width: '100%', height: 130, borderRadius: 8, marginBottom: 8 }}
+          />
+          <ShimmerPlaceHolder
+            LinearGradient={LinearGradient}
+            style={{ width: '80%', height: 20, borderRadius: 4, marginBottom: 6 }}
+          />
+          <ShimmerPlaceHolder
+            LinearGradient={LinearGradient}
+            style={{ width: '50%', height: 18, borderRadius: 4, marginBottom: 6 }}
+          />
+          <ShimmerPlaceHolder
+            LinearGradient={LinearGradient}
+            style={{ width: '30%', height: 16, borderRadius: 4 }}
+          />
+        </View>
+      ))}
+    </View>
+  );
+
   const renderFooter = () => {
     if (!isFetchingMore) return null;
     return <ActivityIndicator size="small" color="#007AFF" style={{ marginVertical: 16 }} />;
@@ -101,7 +144,16 @@ export default function AdvancedFilterScreen() {
 
   const renderFilterHeader = () => (
     <View style={styles.container}>
-      <Text style={styles.heading}>Bộ Lọc Sản Phẩm</Text>
+      {/* Nút back + tiêu đề */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={{ marginRight: 12, padding: 5 }}
+        >
+          <Ionicons name="arrow-back" size={26} color="#007AFF" />
+        </TouchableOpacity>
+        <Text style={styles.heading}>Bộ Lọc Sản Phẩm</Text>
+      </View>
       <View style={styles.card}>
         <Text style={styles.label}>Danh mục</Text>
         <TouchableOpacity style={styles.selectBox} onPress={() => setCategoryModalVisible(true)}>
@@ -156,30 +208,39 @@ export default function AdvancedFilterScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      {loading && page === 1 ? (
-        <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 20 }} />
+      {/* Nếu loading và đã bấm tìm kiếm thì show skeleton shimmer */}
+      {loading && isSearched && page === 1 ? (
+        <>
+          {renderFilterHeader()}
+          {renderSkeletonGrid()}
+        </>
       ) : (
         <FlatList
-          data={products}
+          data={isSearched ? products : []}
           keyExtractor={(item, index) => item._id || index.toString()}
           numColumns={2}
-          onEndReached={handleLoadMore}
+          onEndReached={isSearched ? handleLoadMore : null}
           onEndReachedThreshold={0.5}
-          ListFooterComponent={renderFooter}
+          ListFooterComponent={isSearched ? renderFooter : null}
           ListHeaderComponent={renderFilterHeader}
           columnWrapperStyle={{ gap: 8, justifyContent: 'space-between' }}
           contentContainerStyle={{ padding: 8 }}
-         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.productCardGrid}
-            onPress={() => router.push({ pathname: '/productDetail', params: { productId: item._id } })}
-          >
-            <Image source={{ uri: item.images?.[0] || '' }} style={styles.productImageGrid} />
-            <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-            <Text style={styles.productPrice}>{item.price.toLocaleString()}đ</Text>
-            <Text style={styles.productRating}>⭐ {item.averageRating}</Text>
-          </TouchableOpacity>
-        )}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.productCardGrid}
+              onPress={() => router.push({ pathname: '/productDetail', params: { productId: item._id } })}
+            >
+              <Image source={{ uri: item.images?.[0] || '' }} style={styles.productImageGrid} />
+              <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
+              <Text style={styles.productPrice}>{item.price.toLocaleString()}đ</Text>
+              <Text style={styles.productRating}>⭐ {item.averageRating}</Text>
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            isSearched && !loading && products.length === 0 ?
+              <Text style={{ textAlign: 'center', marginTop: 40, color: '#888' }}>Không có sản phẩm nào.</Text>
+              : null
+          }
         />
       )}
 
@@ -194,7 +255,7 @@ export default function AdvancedFilterScreen() {
                 onPress={() => {
                   setSelectedCategory(cat.name);
                   setCategoryModalVisible(false);
-                  handleApplyFilter();
+                  // Không gọi filter luôn ở đây nữa, phải bấm tìm kiếm mới lọc!
                 }}
                 style={styles.modalItemContainer}
               >
@@ -216,7 +277,7 @@ export default function AdvancedFilterScreen() {
                 onPress={() => {
                   setSort(opt);
                   setSortModalVisible(false);
-                  handleApplyFilter();
+                  // Không gọi filter luôn ở đây nữa, phải bấm tìm kiếm mới lọc!
                 }}
                 style={styles.modalItemContainer}
               >
@@ -231,36 +292,36 @@ export default function AdvancedFilterScreen() {
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   productCardGrid: {
-  backgroundColor: '#fff',
-  flex: 1,
-  marginBottom: 12,
-  borderRadius: 12,
-  padding: 10,
-  shadowColor: '#000',
-  shadowOpacity: 0.1,
-  shadowRadius: 8,
-  shadowOffset: { width: 0, height: 2 },
-  elevation: 3,
-},
-productImageGrid: {
-  width: '100%',
-  height: 130,
-  borderRadius: 8,
-  marginBottom: 8,
-},
-
-    rowWrap: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  gap : 8
-},
-halfBox: {
-  flex: 1,
-},
+    backgroundColor: '#fff',
+    flex: 1,
+    marginBottom: 12,
+    borderRadius: 12,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  productImageGrid: {
+    width: '100%',
+    height: 130,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  rowWrap: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap : 8
+  },
+  halfBox: {
+    flex: 1,
+  },
   container: { flexGrow: 1, backgroundColor: '#f8f9fa', padding: 8,marginTop : 30 },
-  heading: { fontSize: 28, fontWeight: '700', marginBottom: 20, color: '#333', textAlign: 'center' },
+  heading: { fontSize: 22, fontWeight: '700', color: '#333', textAlign: 'left', flex: 1, marginBottom: 0 ,left: 60},
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
   label: { fontWeight: '600', marginTop: 16, color: '#444', fontSize: 14 },
   inputContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#ddd', borderRadius: 12, marginTop: 8, paddingHorizontal: 12, backgroundColor: '#fff' },

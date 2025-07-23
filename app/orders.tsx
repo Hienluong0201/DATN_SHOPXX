@@ -21,7 +21,28 @@ const TAB_OPTIONS = [
   'Đã giao',
   'Đã hủy',
 ];
+const getPaymentLabel = (method : any) => {
+  if (!method) return 'Không rõ';
+  const lower = method.toLowerCase();
+  if (lower.includes('credit')) return 'Thẻ tín dụng';
+  if (lower.includes('zalo')) return 'ZaloPay';
+  if (lower.includes('momo')) return 'Momo';
+  if (lower.includes('vnpay')) return 'VNPay';
+  if (lower.includes('bank')) return 'Chuyển khoản ngân hàng';
+  if (lower.includes('cash')) return 'Tiền mặt';
+  return method;
+};
 
+const getPaymentIcon = (method : any) => {
+  if (!method) return 'help-circle-outline';
+  const lower = method.toLowerCase();
+  if (lower.includes('credit')) return 'card-outline';
+  if (lower.includes('zalo')) return 'logo-usd'; // Nếu có icon Zalo thì thay
+  if (lower.includes('momo')) return 'logo-usd';
+  if (lower.includes('bank')) return 'swap-horizontal-outline';
+  if (lower.includes('cash')) return 'cash-outline';
+  return 'help-circle-outline';
+};
 const Orders = () => {
   const { user, loadUser } = useAuth();
   const [orders, setOrders] = useState([]);
@@ -220,14 +241,14 @@ const Orders = () => {
                   <Ionicons name="calendar-outline" size={18} color="#666" />
                   <Text style={styles.detailText}>Ngày đặt: {formatDate(order.orderDate)}</Text>
                 </View>
-                <View style={styles.detailRow}>
+               <View style={styles.detailRow}>
                   <Ionicons
-                    name={order.paymentID?.paymentMethod === 'Credit Card' ? 'card-outline' : 'cash-outline'}
+                    name={getPaymentIcon(order.paymentID?.paymentMethod)}
                     size={18}
                     color="#666"
                   />
                   <Text style={styles.detailText}>
-                    Thanh toán: {order.paymentID?.paymentMethod === 'Credit Card' ? 'Thẻ tín dụng' : 'Tiền mặt'}
+                    Thanh toán: {getPaymentLabel(order.paymentID?.paymentMethod)}
                   </Text>
                 </View>
               </View>

@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ProductProvider } from '../store/useProducts';
 import { GestureHandlerRootView } from 'react-native-gesture-handler'; // Thêm import này
 import { StripeProvider } from '@stripe/stripe-react-native'; 
+import { useAuth } from '../store/useAuth';
 export default function RootLayout() {
   const [checkingLogin, setCheckingLogin] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -14,6 +15,7 @@ export default function RootLayout() {
       try {
         const loginStatus = await AsyncStorage.getItem('isLoggedIn');
         setIsLoggedIn(loginStatus === 'true');
+        await useAuth.getState().loadUser();
       } catch (error) {
         console.error('Error checking login status:', error);
         setIsLoggedIn(false);
