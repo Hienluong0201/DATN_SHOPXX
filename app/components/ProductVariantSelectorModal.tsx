@@ -19,7 +19,7 @@ interface Variant {
 interface Props {
   visible: boolean;
   onClose: () => void;
-  onConfirm: (variantId: string) => void;
+  onConfirm: (variantId: string, quantity: number) => void;
   variants: Variant[];
   product: { Image: string; Name: string; Price: string } | null;
 }
@@ -33,39 +33,48 @@ const ProductVariantSelectorModal: React.FC<Props> = ({
 }) => {
   const [selectedColor, setSelectedColor] = React.useState<string | null>(null);
   const [selectedSize, setSelectedSize] = React.useState<string | null>(null);
+  const [quantity, setQuantity] = React.useState<number>(1);
   const [imageError, setImageError] = React.useState(false);
+
   const colors = Array.from(new Set(variants.map(v => v.color)));
-React.useEffect(() => {
-  setImageError(false); // reset mỗi khi đổi sản phẩm
-}, [product?.Image]);
+
+  React.useEffect(() => {
+    setImageError(false); // reset mỗi khi đổi sản phẩm
+  }, [product?.Image]);
+
   const sizes = selectedColor
     ? Array.from(new Set(variants.filter(v => v.color === selectedColor).map(v => v.size)))
     : [];
 
+  const selectedVariant = variants.find(
+    v => v.color === selectedColor && v.size === selectedSize
+  );
+
   const getSelectedVariantId = (): string | null => {
-    const variant = variants.find(
-      v => v.color === selectedColor && v.size === selectedSize
-    );
-    return variant?._id || null;
+    return selectedVariant?._id || null;
   };
 
   const handleConfirm = () => {
     const variantId = getSelectedVariantId();
     if (variantId) {
-      onConfirm(variantId);
+      onConfirm(variantId, quantity);
       onClose();
     }
   };
 
   React.useEffect(() => {
-    if (visible) {
-      setSelectedColor(null);
-      setSelectedSize(null);
-    }
+    // Reset khi mở modal hoặc đổi màu/size
+    setSelectedColor(null);
+    setSelectedSize(null);
+    setQuantity(1);
   }, [visible]);
 
+  React.useEffect(() => {
+    setQuantity(1);
+  }, [selectedColor, selectedSize]);
+
   if (!product) return null;
-  console.log('Product image URI:', product.Image);
+
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
@@ -137,14 +146,44 @@ React.useEffect(() => {
             </>
           )}
 
+          {/* Chọn số lượng */}
+          {selectedColor && selectedSize && selectedVariant && (
+            <View style={styles.quantityContainer}>
+              <Text style={styles.sectionTitle}>Số lượng</Text>
+              <View style={styles.quantityControl}>
+                <TouchableOpacity
+                  onPress={() => setQuantity(q => Math.max(1, q - 1))}
+                  style={[styles.quantityBtn, quantity <= 1 && styles.quantityBtnDisabled]}
+                  disabled={quantity <= 1}
+                >
+                  <Text style={styles.quantityBtnText}>-</Text>
+                </TouchableOpacity>
+                <Text style={styles.quantityText}>{quantity}</Text>
+                <TouchableOpacity
+                  onPress={() =>
+                    setQuantity(q => Math.min(selectedVariant.stock, q + 1))
+                  }
+                  style={[
+                    styles.quantityBtn,
+                    quantity >= selectedVariant.stock && styles.quantityBtnDisabled,
+                  ]}
+                  disabled={quantity >= selectedVariant.stock}
+                >
+                  <Text style={styles.quantityBtnText}>+</Text>
+                </TouchableOpacity>
+                <Text style={styles.stockText}>/ {selectedVariant.stock} còn lại</Text>
+              </View>
+            </View>
+          )}
+
           {/* Xác nhận */}
           <TouchableOpacity
             style={[
               styles.confirmButton,
-              !(selectedColor && selectedSize) && { backgroundColor: '#ccc' },
+              !(selectedColor && selectedSize && selectedVariant && quantity > 0) && { backgroundColor: '#ccc' },
             ]}
             onPress={handleConfirm}
-            disabled={!(selectedColor && selectedSize)}
+            disabled={!(selectedColor && selectedSize && selectedVariant && quantity > 0)}
           >
             <Text style={styles.confirmText}>Thêm vào giỏ hàng</Text>
           </TouchableOpacity>
@@ -221,6 +260,38 @@ const styles = StyleSheet.create({
   },
   variantTextSelected: {
     color: '#fff',
+  },
+  quantityContainer: {
+    marginBottom: 20,
+  },
+  quantityControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  quantityBtn: {
+    backgroundColor: '#eee',
+    borderRadius: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginHorizontal: 6,
+  },
+  quantityBtnDisabled: {
+    opacity: 0.5,
+  },
+  quantityBtnText: {
+    fontSize: 18,
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  quantityText: {
+    fontSize: 16,
+    width: 32,
+    textAlign: 'center',
+  },
+  stockText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 6,
   },
   confirmButton: {
     backgroundColor: '#8B4513',

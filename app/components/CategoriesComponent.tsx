@@ -1,8 +1,5 @@
-// CategoriesComponent.tsx
 import React from 'react';
-import { Animated, ScrollView, Text, View, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { TouchableOpacity } from 'react-native';
+import { Animated, ScrollView, Text, View, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 
 interface CategoriesComponentProps {
@@ -26,9 +23,14 @@ export default function CategoriesComponent({ slideAnim, categories, navigateToC
             key={category.CategoryID}
             style={styles.categoryCard}
             onPress={() => navigateToCategory(category.CategoryID)}
+            activeOpacity={0.8}
           >
             <View style={styles.categoryIcon}>
-              <Ionicons name={category.Icon} size={30} color="#8B4513" />
+              <Image
+                source={category.Icon}
+                style={styles.iconImage}
+                resizeMode="contain"
+              />
             </View>
             <Text style={styles.categoryName}>{category.Name}</Text>
           </TouchableOpacity>
@@ -70,10 +72,17 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     padding: 15,
     marginBottom: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconImage: {
+    width: 36,
+    height: 36,
   },
   categoryName: {
     fontSize: 14,
     color: '#333',
     textAlign: 'center',
+    marginTop: 2,
   },
 });

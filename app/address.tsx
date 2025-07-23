@@ -49,7 +49,7 @@ const AddressScreen = () => {
     message: '',
   });
   const [zaloAppTransId, setZaloAppTransId] = useState(null);
-
+  const [zaloOrderId, setZaloOrderId] = useState(null);
 
   // --- Show modal lỗi/thành công ---
   const showModal = (type, title, message) => {
@@ -127,30 +127,27 @@ const AddressScreen = () => {
     { id: 'zalopay', name: 'Thanh toán bằng ZaloPay', gateway: 'ZaloPay' },
   ];
   //Kiểm tra trạng thái thanh toán zalo pay
-  const checkZaloPayStatus = async (app_trans_id) => {
-    try {
-      // Gọi API backend kiểm tra trạng thái ZaloPay
-      const statusRes = await AxiosInstance().post('/order/zalopay-status', {
-        app_trans_id
-      });
-      console.log('Kết quả check trạng thái ZaloPay:', statusRes);
+  const checkZaloPayStatus = async (app_trans_id, orderId) => {
+  try {
+    // Gọi API backend kiểm tra trạng thái ZaloPay, truyền cả orderId để backend xử lý auto-cancel
+    const statusRes = await AxiosInstance().post('/order/zalopay-status', {
+      app_trans_id,
+      orderId         // Thêm dòng này!
+    });
+    console.log('Kết quả check trạng thái ZaloPay:', statusRes);
 
-      if (statusRes.return_code === 1) {
-        // Thành công!
-        showModal('success', 'Thanh toán thành công', 'Giao dịch của bạn đã được xử lý!');
-        // Có thể điều hướng qua trang hoàn tất đơn hàng
-        // router.push({pathname: '/checkout', params: ...})
-      } else if (statusRes.return_code === 3) {
-        // Chưa thanh toán
-        showModal('warning', 'Đang chờ thanh toán', 'Giao dịch chưa được thực hiện. Vui lòng thanh toán trên ZaloPay và thử lại.');
-      } else {
-        showModal('error', 'Lỗi thanh toán', statusRes.return_message || 'Không xác định được trạng thái giao dịch!');
-      }
-    } catch (err) {
-      showModal('error', 'Lỗi', err.response?.data?.error || err.message || 'Không thể kiểm tra trạng thái!');
+    if (statusRes.return_code === 1) {
+      showModal('success', 'Thanh toán thành công', 'Giao dịch của bạn đã được xử lý!');
+      // router.push({pathname: '/checkout', params: ...});
+    } else if (statusRes.return_code === 3) {
+      showModal('warning', 'Đang chờ thanh toán', 'Giao dịch chưa được thực hiện. Vui lòng thanh toán trên ZaloPay và thử lại.');
+    } else {
+      showModal('error', 'Lỗi thanh toán', statusRes.return_message || 'Không xác định được trạng thái giao dịch!');
     }
-  };
-
+  } catch (err) {
+    showModal('error', 'Lỗi', err.response?.data?.error || err.message || 'Không thể kiểm tra trạng thái!');
+  }
+};
   // --- Gửi đơn hàng ---
 const handleContinue = async () => {
   if (!selectedAddress) {
@@ -228,7 +225,7 @@ const handleContinue = async () => {
 
     // Tiền mặt khi nhận hàng
     if (selectedPaymentMethod.id === 'cash') {
-      router.push({
+      router.replace({
         pathname: '/checkout',
         params,
       });
@@ -298,6 +295,7 @@ const handleContinue = async () => {
 
         if (order_url && app_trans_id) {
           setZaloAppTransId(app_trans_id); // <-- Lưu app_trans_id để auto check khi quay lại app!
+          setZaloOrderId(orderResponse.order._id);
           const canOpen = await Linking.canOpenURL(order_url);
           if (canOpen) {
             await Linking.openURL(order_url);
@@ -325,14 +323,14 @@ const handleContinue = async () => {
 };
 //check thanh toán
 useEffect(() => {
-  if (!zaloAppTransId) return;
+  if (!zaloAppTransId || !zaloOrderId) return;
   const subscription = AppState.addEventListener('change', (nextAppState) => {
-    if (nextAppState === 'active' && zaloAppTransId) {
-      checkZaloPayStatus(zaloAppTransId);
+    if (nextAppState === 'active' && zaloAppTransId && zaloOrderId) {
+      checkZaloPayStatus(zaloAppTransId, zaloOrderId);
     }
   });
   return () => subscription.remove();
-}, [zaloAppTransId]);
+}, [zaloAppTransId, zaloOrderId]);
 
   // --- UI chọn voucher ---
   const renderVoucher = ({ item }) => {
@@ -478,7 +476,7 @@ useEffect(() => {
                 Danh sách Voucher
               </Text>
               <FlatList
-                data={vouchers}
+                  data={vouchers.filter(v => v.isActive)}
                 keyExtractor={item => item._id}
                 renderItem={renderVoucher}
                 ListEmptyComponent={<Text style={{ color: '#999', textAlign: 'center', padding: 25 }}>Không có voucher</Text>}
@@ -523,9 +521,6 @@ useEffect(() => {
         {/* Đơn hàng */}
         <View style={styles.orderSection}>
           <Text style={styles.sectionTitle}>Đơn hàng của bạn</Text>
-          {variantLoading || paymentLoading ? (
-            <ActivityIndicator size="small" color="#8B5A2B" style={{ marginVertical: 8 }} />
-          ) : null}
           {products.length === 0 ? (
             <Text style={{ color: '#999', padding: 15 }}>Không có sản phẩm nào được chọn.</Text>
           ) : (
@@ -597,7 +592,13 @@ useEffect(() => {
         message={modalConfig.message}
         onClose={() => setModalVisible(false)}
       />
+      {(variantLoading || paymentLoading) && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color="#fff" />
+          </View>
+        )}
     </View>
+    
   );
 };
 
@@ -626,6 +627,14 @@ const voucherStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
+  loadingOverlay: {
+  position: 'absolute',
+  top: 0, left: 0, right: 0, bottom: 0,
+  backgroundColor: 'rgba(0,0,0,0.35)',
+  justifyContent: 'center',
+  alignItems: 'center',
+  zIndex: 9999,
+},
   rootContainer: { flex: 1, backgroundColor: '#f0f2f5' ,marginTop : 40},
   container: { flex: 1, padding: 20, backgroundColor: '#f0f2f5' },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },

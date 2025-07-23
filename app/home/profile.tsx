@@ -86,7 +86,7 @@ const ProfileScreen = () => {
         </TouchableOpacity>
         <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/payment')}>
           <MaterialIcons name="payment" size={24} color="#8B5A2B" />
-          <Text style={styles.menuText}>Phương thức thanh toán</Text>
+          <Text style={styles.menuText}>Đơn hàng chờ thanh toán </Text>
           <Ionicons name="chevron-forward" size={20} color="#8B5A2B" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/orders')}>

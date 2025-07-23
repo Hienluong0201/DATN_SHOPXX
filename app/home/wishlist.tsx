@@ -3,27 +3,28 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
   RefreshControl,
   Dimensions,
+  FlatList,
 } from 'react-native';
 import { useAuth } from '../../store/useAuth';
 import AxiosInstance from '../../axiosInstance/AxiosInstance';
 import { Ionicons } from '@expo/vector-icons';
 import CustomModal from '../components/CustomModal';
 
-// Thay path này đúng với vị trí bạn để file hình
 const emptyImg = require('../../assets/images/laughing.png');
+const { width } = Dimensions.get('window');
+const CARD_MARGIN = 10;
+const CARD_WIDTH = (width - CARD_MARGIN * 3) / 2;
 
 const Wishlist = () => {
   const { user } = useAuth();
   const [wishlist, setWishlist] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalConfig, setModalConfig] = useState({
@@ -47,22 +48,20 @@ const Wishlist = () => {
 
   const fetchWishlist = async () => {
     if (!user?._id) {
-      setError('Vui lòng đăng nhập để xem danh sách yêu thích.');
       setLoading(false);
-      setRefreshing(false);
+      setWishlist([]);
       return;
     }
-
     try {
       setLoading(true);
       const response = await AxiosInstance().get(`/wishlist?userID=${user._id}`);
       const mappedWishlist = await Promise.all(
         (Array.isArray(response) ? response : []).map(async (item) => {
-          let imageURLs = ['https://via.placeholder.com/100/cccccc?text=No+Image'];
+          let imageURLs = ['https://via.placeholder.com/200x200/cccccc?text=No+Image'];
           try {
             const imageResponse = await AxiosInstance().get(`/img?productID=${item.productID._id}`);
             imageURLs = imageResponse[0]?.imageURL || imageURLs;
-          } catch (imgError) {}
+          } catch {}
           return {
             WishlistID: item._id,
             ProductID: item.productID._id,
@@ -74,9 +73,7 @@ const Wishlist = () => {
         })
       );
       setWishlist(mappedWishlist);
-      setError(null);
-    } catch (err) {
-      setError('Không thể tải danh sách yêu thích. Vui lòng thử lại.');
+    } catch {
       setWishlist([]);
     } finally {
       setLoading(false);
@@ -95,7 +92,7 @@ const Wishlist = () => {
           await AxiosInstance().delete(`/wishlist/${wishlistId}`);
           setWishlist(wishlist.filter((item) => item.WishlistID !== wishlistId));
           showModal('success', 'Thành công', 'Đã xóa sản phẩm khỏi danh sách yêu thích.');
-        } catch (err) {
+        } catch {
           showModal('error', 'Lỗi', 'Không thể xóa sản phẩm khỏi danh sách yêu thích.');
         }
       }
@@ -117,12 +114,11 @@ const Wishlist = () => {
   if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#d4af37" />
+        <ActivityIndicator size="large" color="#e11d48" />
       </View>
     );
   }
 
-  // GIAO DIỆN ĐẸP KHI CHƯA ĐĂNG NHẬP
   if (!user?._id) {
     return (
       <View style={styles.authContainer}>
@@ -133,7 +129,7 @@ const Wishlist = () => {
           <TouchableOpacity
             style={[styles.authBtn, styles.loginBtn]}
             onPress={() => router.push('/login')}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
             <Ionicons name="log-in-outline" size={24} color="#fff" />
             <Text style={styles.btnText}>Đăng nhập</Text>
@@ -141,7 +137,7 @@ const Wishlist = () => {
           <TouchableOpacity
             style={[styles.authBtn, styles.backBtn]}
             onPress={() => router.back()}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
             <Ionicons name="arrow-back-outline" size={24} color="#fff" />
             <Text style={styles.btnText}>Quay lại</Text>
@@ -151,57 +147,59 @@ const Wishlist = () => {
     );
   }
 
-  return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={['#d4af37']}
-          tintColor="#d4af37"
-        />
-      }
-      contentContainerStyle={styles.scrollContent}
+  const renderWishlistItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.91}
+      onPress={() => navigateToProductDetail(item.ProductID)}
     >
-      <Text style={styles.title}>Danh Sách Yêu Thích</Text>
+      <View style={styles.imageWrap}>
+        <Image
+          source={{ uri: item.Image }}
+          style={styles.image}
+          resizeMode="cover"
+        />
+        <TouchableOpacity
+          style={styles.heartButton}
+          onPress={() => removeFromWishlist(item.WishlistID)}
+          activeOpacity={0.65}
+        >
+          <Ionicons name="heart" size={26} color="#f43f5e" />
+        </TouchableOpacity>
+      </View>
+      <View style={styles.infoBox}>
+        <Text style={styles.name} numberOfLines={2}>{item.Name}</Text>
+        <Text style={styles.price}>{item.Price.toLocaleString('vi-VN')}đ</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  return (
+    <View style={styles.root}>
+      <Text style={styles.title}>Yêu Thích</Text>
       {wishlist.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="heart-outline" size={50} color="#999" />
-          <Text style={styles.emptyText}>Danh sách yêu thích trống</Text>
-          <Text style={styles.emptySubText}>Thêm sản phẩm vào danh sách để xem tại đây!</Text>
+          <Ionicons name="heart-outline" size={54} color="#e11d48" />
+          <Text style={styles.emptyText}>Chưa có sản phẩm yêu thích</Text>
+          <Text style={styles.emptySubText}>Thêm vào để xem lại dễ dàng hơn!</Text>
         </View>
       ) : (
-        wishlist.map((item) => (
-          <TouchableOpacity
-            key={item.WishlistID}
-            style={styles.card}
-            onPress={() => navigateToProductDetail(item.ProductID)}
-            activeOpacity={0.8}
-          >
-            <Image
-              source={{ uri: item.Image }}
-              style={styles.image}
-              defaultSource={{ uri: 'https://via.placeholder.com/100/cccccc?text=Loading' }}
+        <FlatList
+          data={wishlist}
+          numColumns={2}
+          keyExtractor={(item) => item.WishlistID}
+          renderItem={renderWishlistItem}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.grid,{ paddingBottom: 70 }]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#e11d48']}
+              tintColor="#e11d48"
             />
-            <View style={styles.info}>
-              <Text style={styles.name} numberOfLines={2} ellipsizeMode="tail">
-                {item.Name}
-              </Text>
-              <Text style={styles.description} numberOfLines={2} ellipsizeMode="tail">
-                {item.Description}
-              </Text>
-              <Text style={styles.price}>{item.Price.toLocaleString('vi-VN')}đ</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.removeButton}
-              onPress={() => removeFromWishlist(item.WishlistID)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="trash-outline" size={20} color="#fff" />
-            </TouchableOpacity>
-          </TouchableOpacity>
-        ))
+          }
+        />
       )}
       <CustomModal
         isVisible={modalVisible}
@@ -212,135 +210,140 @@ const Wishlist = () => {
         onConfirm={modalConfig.onConfirm}
         showConfirmButton={modalConfig.showConfirmButton}
       />
-    </ScrollView>
+    </View>
   );
 };
 
-const { width } = Dimensions.get('window');
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#fff',
+    paddingTop: 44,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-    marginTop: 40,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 30,
+    backgroundColor: '#fff',
   },
   title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 20,
+    fontSize: 30,
+    fontWeight: '900',
+    color: '#be123c',
     textAlign: 'center',
+    marginBottom: 12,
     letterSpacing: 0.5,
+  },
+  grid: {
+    paddingLeft: CARD_MARGIN,
+    paddingRight: CARD_MARGIN,
+    paddingBottom: 28,
+  },
+  card: {
+    width: CARD_WIDTH,
+    marginBottom: 18,
+    marginHorizontal: CARD_MARGIN / 2, // căn đều 2 bên
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOpacity: 0.09,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    overflow: 'hidden',
+  },
+  imageWrap: {
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: '#f8fafc',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
+  },
+  heartButton: {
+    position: 'absolute',
+    top: 8,
+    right: 10,
+    zIndex: 2,
+    backgroundColor: '#fff',
+    padding: 7,
+    borderRadius: 30,
+    elevation: 7,
+    shadowColor: '#f43f5e',
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  infoBox: {
+    paddingVertical: 11,
+    paddingHorizontal: 13,
+    minHeight: 68,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  name: {
+    fontSize: 15.5,
+    fontWeight: '700',
+    color: '#27272a',
+    marginBottom: 6,
+    lineHeight: 19,
+  },
+  price: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#f43f5e',
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 80,
+    justifyContent: 'center',
+    marginTop: 70,
   },
   emptyText: {
     fontSize: 20,
     fontWeight: '500',
-    color: '#475569',
-    textAlign: 'center',
+    color: '#e11d48',
     marginTop: 15,
+    textAlign: 'center',
   },
   emptySubText: {
     fontSize: 16,
-    color: '#94a3b8',
+    color: '#c026d3',
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 7,
   },
-  card: {
-    flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    marginBottom: 20,
-    padding: 12,
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  image: {
-    width: 110,
-    height: 110,
-    borderRadius: 12,
-    backgroundColor: '#f1f5f9',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  info: {
-    flex: 1,
-    marginLeft: 15,
-    justifyContent: 'center',
-  },
-  name: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 6,
-  },
-  description: {
-    fontSize: 14,
-    color: '#64748b',
-    marginBottom: 8,
-    lineHeight: 20,
-  },
-  price: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#dc2626',
-  },
-  removeButton: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: '#ef4444',
-    borderRadius: 20,
-    padding: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 3,
-  },
-
-  // --- STYLE CHO GIAO DIỆN CHƯA ĐĂNG NHẬP ---
   authContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#fff',
     paddingHorizontal: 24,
     paddingBottom: 50,
   },
   emptyImage: {
-    width: width * 0.5,
-    height: width * 0.5,
-    marginBottom: 30,
+    width: width * 0.48,
+    height: width * 0.48,
+    marginBottom: 28,
   },
   authTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#1e293b',
+    color: '#c026d3',
     textAlign: 'center',
     marginBottom: 10,
     letterSpacing: 0.2,
   },
   authDesc: {
     fontSize: 16,
-    color: '#64748b',
+    color: '#b91c1c',
     textAlign: 'center',
     marginBottom: 30,
   },
@@ -360,10 +363,10 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   loginBtn: {
-    backgroundColor: '#d97706', // vàng cam hiện đại
+    backgroundColor: '#d97706',
   },
   backBtn: {
-    backgroundColor: '#6d28d9', // tím hiện đại
+    backgroundColor: '#6d28d9',
   },
   btnText: {
     color: '#fff',
@@ -373,4 +376,5 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 });
+
 export default Wishlist;

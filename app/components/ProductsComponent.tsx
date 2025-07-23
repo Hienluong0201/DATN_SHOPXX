@@ -8,7 +8,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
+import { Video } from 'expo-av';
 interface ProductsComponentProps {
   slideAnim?: Animated.Value; // ✅ optional & đúng kiểu
   filteredProducts: any[];
@@ -94,10 +94,24 @@ export default function ProductsComponent({
               onPress={() => navigateToProductDetail(productId)}
             >
               <View style={styles.imageContainer}>
-                <Image
-                  source={{ uri: imageUrl }}
-                  style={styles.productImage}
-                />
+                {Array.isArray(product.Videos) && product.Videos.length > 0 ? (
+                  <Video
+                    source={{ uri: product.Videos[0] }}
+                    style={styles.productImage}
+                    useNativeControls={false}
+                    resizeMode="cover"
+                    isLooping
+                    shouldPlay={true}
+                    isMuted={true}
+                    posterSource={{ uri: imageUrl }}
+                    posterStyle={styles.productImage}
+                  />
+                ) : (
+                  <Image
+                    source={{ uri: imageUrl }}
+                    style={styles.productImage}
+                  />
+                )}
                 <TouchableOpacity
                   style={styles.favoriteButton}
                   onPress={() => handleToggleWishlist(product)}
@@ -109,6 +123,7 @@ export default function ProductsComponent({
                   />
                 </TouchableOpacity>
               </View>
+
               <View style={styles.productInfo}>
                 <Text style={styles.productName} numberOfLines={1} ellipsizeMode="tail">
                   {name}
@@ -129,14 +144,13 @@ export default function ProductsComponent({
           );
         })}
       </View>
-      {allProducts.length >= page * 10 && (
+     
         <TouchableOpacity
           style={styles.loadMoreButton}
           onPress={loadMoreProducts}
         >
           <Text style={styles.loadMoreText}>Tải thêm sản phẩm</Text>
         </TouchableOpacity>
-      )}
     </Animated.View>
   );
 }

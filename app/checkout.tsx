@@ -33,7 +33,7 @@ const Checkout = () => {
   }, []);
 
   const handleViewOrders = () => {
-    router.push('./orders');
+    router.replace('./orders');
   };
 
   const handleContinueShopping = () => {

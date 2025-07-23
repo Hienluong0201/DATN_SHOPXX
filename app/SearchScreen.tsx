@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState,useRef } from 'react';
 import { View, TextInput, StyleSheet, FlatList, Text, Image, TouchableOpacity, Alert } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useProducts } from '../store/useProducts';
@@ -19,7 +19,7 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hasMore, setHasMore] = useState(true);
-
+  const debounceTimer = useRef(null);
   const fetchProducts = async (query, pageNum, reset = false) => {
     setLoading(true);
     setError(null);
@@ -67,9 +67,16 @@ export default function SearchScreen() {
   const handleSearch = (query) => {
     setSearchQuery(query);
     setPage(1);
+
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+
     if (query.length > 0) {
-      fetchProducts(query, 1, true);
-    } else if (query.length === 0) {
+      debounceTimer.current = setTimeout(() => {
+        fetchProducts(query, 1, true);
+      }, 1000); // 2 giây
+    } else {
       setProducts([]);
     }
   };
