@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View, ImageBackground } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../store/useAuth';
 
 const logoImage = require('../assets/images/logo.png');
 
@@ -50,13 +52,24 @@ export default function SplashScreen() {
       ]),
     ).start();
 
-    const timer = setTimeout(() => {
-      router.replace('/home');
-    }, 3000);
+    const timer = setTimeout(async () => {
+    try {
+      await useAuth.getState().loadUser();
+      const user = useAuth.getState().user;
+      console.log("🧠 User trong SplashScreen:", user); 
+      if (user) {
+        router.replace('/home');
+      } else {
+        router.replace('/login'); // hoặc '/index'
+      }
+    } catch (error) {
+      console.error('Error in splash login check:', error);
+      router.replace('/login');
+    }
+  }, 3000);
 
-    return () => clearTimeout(timer);
-  }, []);
-
+  return () => clearTimeout(timer);
+}, []);
   const textColor = colorAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['#ffffff', '#ffd700'],

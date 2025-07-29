@@ -85,7 +85,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       if (!isValidUser(user) && !isValidFBUser(user) && !isValidFirebaseUser(user)) {
         throw new Error('Invalid user data');
       }
-
+       console.log("🧠 Đang lưu user:", user); // log ra để chắc chắn
       await AsyncStorage.setItem('isLoggedIn', 'true');
       await AsyncStorage.setItem('user', JSON.stringify(user));
       set({ user });
@@ -111,48 +111,44 @@ export const useAuth = create<AuthState>((set, get) => ({
     }
   },
 
-  loadUser: async () => {
-    try {
-      const userData = await AsyncStorage.getItem('user');
-      if (userData) {
-        let parsedUser: AuthUser;
-        try {
-          parsedUser = JSON.parse(userData);
-        } catch (parseError) {
-          console.error('Error parsing user data:', parseError);
-          set({ user: null });
-          return;
-        }
+ loadUser: async () => {
+  try {
+    const userData = await AsyncStorage.getItem('user');
+    console.log("🧩 Dữ liệu user lấy từ AsyncStorage:", userData);
 
-        if (
-          !isValidUser(parsedUser) &&
-          !isValidFBUser(parsedUser) &&
-          !isValidFirebaseUser(parsedUser)
-        ) {
-          console.warn('Invalid user data in AsyncStorage');
-          set({ user: null });
-          return;
-        }
-
-        const currentUser = get().user;
-        const isSameUser = currentUser && ('_id' in currentUser || 'uid' in currentUser)
-          ? (('_id' in currentUser ? currentUser._id : currentUser.uid) ===
-             ('_id' in parsedUser ? (parsedUser as any)._id : (parsedUser as any).uid))
-          : currentUser?.id === (parsedUser as any).id;
-
-        if (!isSameUser) {
-          set({ user: parsedUser });
-        }
-      } else {
-        if (get().user !== null) {
-          set({ user: null });
-        }
+    if (userData) {
+      let parsedUser: AuthUser;
+      try {
+        parsedUser = JSON.parse(userData);
+        console.log("✅ Parsed user:", parsedUser);
+      } catch (parseError) {
+        console.error('❌ Lỗi parse user:', parseError);
+        set({ user: null });
+        return;
       }
-    } catch (error) {
-      console.error('Error loading user from AsyncStorage:', error);
+
+      if (
+        !isValidUser(parsedUser) &&
+        !isValidFBUser(parsedUser) &&
+        !isValidFirebaseUser(parsedUser)
+      ) {
+        console.warn('⚠️ Dữ liệu user không hợp lệ');
+        set({ user: null });
+        return;
+      }
+
+      // ✅ Gán luôn user vào store
+      set({ user: parsedUser });
+    } else {
+      console.warn('⚠️ Không tìm thấy dữ liệu user');
       set({ user: null });
     }
-  },
+  } catch (error) {
+    console.error('❌ Lỗi load user:', error);
+    set({ user: null });
+  }
+},
+
 
   setUser: (user) => set({ user }),
 }));

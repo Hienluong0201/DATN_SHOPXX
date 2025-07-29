@@ -1,46 +1,75 @@
+// File: HomeLayout.js (sau khi chỉnh)
+import React, { useState } from 'react';
+import {
+  StyleSheet,
+  View,
+  Pressable,
+  Modal,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import ReviewsScreen from '../reviews';
+
 import CartScreen from './cart';
 import IndexScreen from './index';
 import ProfileScreen from './profile';
 import WishlistScreen from './wishlist';
+import VideoScreen from '../video';
+import ChatWithShop from '../reviews'; // Đưa vào Modal
 
 const Tab = createBottomTabNavigator();
 
 export default function HomeLayout() {
+  const [modalVisible, setModalVisible] = useState(false);
+
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarShowLabel: false,
-        tabBarStyle: styles.tabBar,
-        tabBarItemStyle: styles.tabItem,
-        headerShown: false,
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
+    <View style={{ flex: 1 }}>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          tabBarShowLabel: false,
+          tabBarStyle: styles.tabBar,
+          tabBarItemStyle: styles.tabItem,
+          headerShown: false,
+          tabBarIcon: ({ focused }) => {
+            let iconName;
 
-          if (route.name === 'index') iconName = 'home-outline';
-          else if (route.name === 'cart') iconName = 'cart-outline';
-          else if (route.name === 'reviews') iconName = 'chatbox-ellipses-outline';
-          else if (route.name === 'profile') iconName = 'person-outline';
-          else if (route.name === 'wishlist') iconName = 'heart-outline';
+            if (route.name === 'index') iconName = 'home-outline';
+            else if (route.name === 'cart') iconName = 'cart-outline';
+            else if (route.name === 'video') iconName = 'film-outline';
+            else if (route.name === 'wishlist') iconName = 'heart-outline';
+            else if (route.name === 'profile') iconName = 'person-outline';
 
-          return (
-            <View style={[styles.iconContainer, focused && styles.focusedIconContainer]}>
-              <Ionicons name={iconName} size={24} color={focused ? '#8B4513' : '#fff'} />
-            </View>
-          );
-        },
-      })}
-    >
-      <Tab.Screen name="index" component={IndexScreen} options={{ title: 'Trang chủ' }} />
-      <Tab.Screen name="cart" component={CartScreen} options={{ title: 'Giỏ hàng' }} />
-      <Tab.Screen name="reviews" component={ReviewsScreen} options={{ title: 'Đánh giá' }} />
-      <Tab.Screen name="profile" component={ProfileScreen} options={{ title: 'Hồ sơ' }} />
-      <Tab.Screen name="wishlist" component={WishlistScreen} options={{ title: 'Yêu thích' }} />
-    </Tab.Navigator>
+            return (
+              <View style={[styles.iconContainer, focused && styles.focusedIconContainer]}>
+                <Ionicons name={iconName} size={24} color={focused ? '#8B4513' : '#fff'} />
+              </View>
+            );
+          },
+        })}
+      >
+        <Tab.Screen name="index" component={IndexScreen} />
+        <Tab.Screen name="cart" component={CartScreen} />
+        <Tab.Screen name="video" component={VideoScreen} />
+        <Tab.Screen name="wishlist" component={WishlistScreen} />
+        <Tab.Screen name="profile" component={ProfileScreen} />
+      </Tab.Navigator>
+
+      {/* Nút chat nổi */}
+      <Pressable
+        style={styles.floatingButton}
+        onPress={() => setModalVisible(true)}
+      >
+        <Ionicons name="chatbubble-ellipses-outline" size={26} color="#fff" />
+      </Pressable>
+
+      {/* Modal chat */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <ChatWithShop onClose={() => setModalVisible(false)} />
+      </Modal>
+    </View>
   );
 }
 
@@ -82,5 +111,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 5,
+  },
+  floatingButton: {
+    position: 'absolute',
+    bottom: 100,
+    right: 25,
+    backgroundColor: '#8B4513',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    zIndex: 999,
   },
 });

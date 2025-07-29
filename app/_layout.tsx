@@ -6,6 +6,7 @@ import { ProductProvider } from '../store/useProducts';
 import { GestureHandlerRootView } from 'react-native-gesture-handler'; // Thêm import này
 import { StripeProvider } from '@stripe/stripe-react-native'; 
 import { useAuth } from '../store/useAuth';
+import 'react-native-gesture-handler';
 export default function RootLayout() {
   const [checkingLogin, setCheckingLogin] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
