@@ -1,14 +1,15 @@
-import React, { useState,useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, TextInput, StyleSheet, FlatList, Text, Image, TouchableOpacity, Alert } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useProducts } from '../store/useProducts';
 import { useAuth } from '../store/useAuth';
 import { router } from 'expo-router';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
-
-// CHỈ IMPORT LinearGradient từ expo-linear-gradient (KHÔNG import react-native-linear-gradient!)
 import { LinearGradient } from 'expo-linear-gradient';
 import ShimmerPlaceHolder from 'react-native-shimmer-placeholder';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const SEARCH_HISTORY_KEY = 'search_history_v1';
 
 export default function SearchScreen() {
   const { addToWishlist, removeFromWishlist, isInWishlist, getWishlistId } = useProducts();
@@ -19,7 +20,45 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hasMore, setHasMore] = useState(true);
+  const [searchHistory, setSearchHistory] = useState([]);
   const debounceTimer = useRef(null);
+
+  // --- Search History functions ---
+  const saveSearchHistory = async (keyword) => {
+    if (!keyword?.trim()) return;
+    try {
+      let history = [];
+      const data = await AsyncStorage.getItem(SEARCH_HISTORY_KEY);
+      if (data) history = JSON.parse(data);
+      history = [keyword, ...history.filter(k => k !== keyword)];
+      if (history.length > 10) history = history.slice(0, 10);
+      await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history));
+      setSearchHistory(history);
+    } catch {}
+  };
+  const getSearchHistory = async () => {
+    try {
+      const data = await AsyncStorage.getItem(SEARCH_HISTORY_KEY);
+      setSearchHistory(data ? JSON.parse(data) : []);
+    } catch {
+      setSearchHistory([]);
+    }
+  };
+  const clearSearchHistory = async () => {
+    await AsyncStorage.removeItem(SEARCH_HISTORY_KEY);
+    setSearchHistory([]);
+  };
+  const removeHistoryItem = async (keyword) => {
+    let history = searchHistory.filter(k => k !== keyword);
+    await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history));
+    setSearchHistory(history);
+  };
+
+  useEffect(() => {
+    getSearchHistory();
+  }, []);
+
+  // --- Search functions ---
   const fetchProducts = async (query, pageNum, reset = false) => {
     setLoading(true);
     setError(null);
@@ -71,14 +110,20 @@ export default function SearchScreen() {
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
     }
-
     if (query.length > 0) {
       debounceTimer.current = setTimeout(() => {
         fetchProducts(query, 1, true);
-      }, 1000); // 2 giây
+        saveSearchHistory(query);
+      }, 1000); // debounce nhanh hơn
     } else {
       setProducts([]);
     }
+  };
+
+  const handleHistoryPress = (query) => {
+    setSearchQuery(query);
+    fetchProducts(query, 1, true);
+    saveSearchHistory(query);
   };
 
   const loadMoreProducts = () => {
@@ -89,6 +134,7 @@ export default function SearchScreen() {
     }
   };
 
+  // --- Wishlist & Detail ---
   const handleToggleWishlist = (product) => {
     if (!user?._id) {
       Alert.alert('Lỗi', 'Vui lòng đăng nhập để thêm vào danh sách yêu thích.');
@@ -101,11 +147,10 @@ export default function SearchScreen() {
       addToWishlist(product, user._id);
     }
   };
-
   const navigateToProductDetail = (productId) =>
     router.push({ pathname: './productDetail', params: { productId } });
 
-  // Skeleton loading với shimmer
+  // --- Skeleton ---
   const renderSkeletonItem = () => (
     <View style={styles.productCard}>
       <ShimmerPlaceHolder
@@ -124,7 +169,6 @@ export default function SearchScreen() {
       </View>
     </View>
   );
-
   const renderProduct = ({ item }) => (
     <TouchableOpacity
       style={styles.productCard}
@@ -156,9 +200,7 @@ export default function SearchScreen() {
     </TouchableOpacity>
   );
 
-  // Khi đang loading lần đầu (page 1), hiện skeleton
-  if (loading && page === 1) {
-  // Render skeleton như 2 cột luôn
+  // --- UI ---
   return (
     <View style={styles.container}>
       <View style={styles.searchContainer}>
@@ -172,31 +214,38 @@ export default function SearchScreen() {
         />
         <MaterialIcons name="search" size={24} color="#8B4513" style={styles.searchIcon} />
       </View>
-      <FlatList
-        data={Array.from({ length: 8 })} // ví dụ 8 skeleton
-        renderItem={renderSkeletonItem}
-        keyExtractor={(_, i) => `skeleton-${i}`}
-        numColumns={2}
-        contentContainerStyle={styles.listContent}
-      />
-    </View>
-  );
-}
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Tìm kiếm sản phẩm..."
-          placeholderTextColor="#999"
-          value={searchQuery}
-          onChangeText={handleSearch}
-          autoFocus={true}
+      {/* Hiện lịch sử tìm kiếm khi chưa có query */}
+      {searchQuery.length === 0 && searchHistory.length > 0 && (
+        <View style={{ marginHorizontal: 15, marginBottom: 8 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Text style={{ color: '#888', fontWeight: '600' }}>Lịch sử tìm kiếm</Text>
+            <TouchableOpacity onPress={clearSearchHistory}>
+              <Text style={{ color: '#FF6F00', fontWeight: '600' }}>Xóa hết</Text>
+            </TouchableOpacity>
+          </View>
+          {searchHistory.map((item, i) => (
+            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+              <TouchableOpacity style={{ flex: 1 }} onPress={() => handleHistoryPress(item)}>
+                <Text style={{ color: '#333', fontSize: 15, paddingVertical: 4 }}>{item}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => removeHistoryItem(item)} style={{ padding: 8 }}>
+                <Ionicons name="close-circle" size={18} color="#aaa" />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {loading && page === 1 ? (
+        <FlatList
+          data={Array.from({ length: 8 })}
+          renderItem={renderSkeletonItem}
+          keyExtractor={(_, i) => `skeleton-${i}`}
+          numColumns={2}
+          contentContainerStyle={styles.listContent}
         />
-        <MaterialIcons name="search" size={24} color="#8B4513" style={styles.searchIcon} />
-      </View>
-      {error ? (
+      ) : error ? (
         <Text style={styles.errorText}>{error}</Text>
       ) : products.length === 0 && searchQuery ? (
         <Text style={styles.noResultsText}>Không tìm thấy sản phẩm nào.</Text>
@@ -207,7 +256,9 @@ export default function SearchScreen() {
           keyExtractor={(item) => item.ProductID}
           contentContainerStyle={styles.listContent}
           numColumns={2}
-         ListFooterComponent={
+          onEndReached={loadMoreProducts}
+          onEndReachedThreshold={0.25}
+          ListFooterComponent={
             loading && page > 1 ? (
               <FlatList
                 data={Array.from({ length: 4 })}
@@ -217,14 +268,6 @@ export default function SearchScreen() {
                 contentContainerStyle={styles.listContent}
                 scrollEnabled={false}
               />
-            ) : hasMore ? (
-              <TouchableOpacity
-                style={[styles.loadMoreButton, loading && { opacity: 0.5 }]}
-                onPress={loadMoreProducts}
-                disabled={loading}
-              >
-                <Text style={styles.loadMoreText}>Tải thêm</Text>
-              </TouchableOpacity>
             ) : null
           }
         />

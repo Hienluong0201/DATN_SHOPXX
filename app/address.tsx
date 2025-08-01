@@ -11,6 +11,7 @@ import { useProducts } from '../store/useProducts';
 import CustomModal from './components/CustomModal';
 import { useStripe } from '@stripe/stripe-react-native';
 import { AppState } from 'react-native';
+import { RefreshControl } from 'react-native';
 
 // --- Utils ---
 const extractProvince = (addressString) => {
@@ -47,13 +48,25 @@ const AddressScreen = () => {
     type: 'error',
     title: '',
     message: '',
+    isPaymentFailure: false,
   });
   const [zaloAppTransId, setZaloAppTransId] = useState(null);
   const [zaloOrderId, setZaloOrderId] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [addressModalVisible, setAddressModalVisible] = useState(false);
+  // Hàm làm mới 
+  const onRefresh = async () => {
+  setRefreshing(true);
+  await Promise.all([
+    fetchAddresses(),
+    fetchVouchers(),
+  ]);
+  setRefreshing(false);
+};
 
   // --- Show modal lỗi/thành công ---
-  const showModal = (type, title, message) => {
-    setModalConfig({ type, title, message });
+  const showModal = (type, title, message, isPaymentFailure = false) => {
+    setModalConfig({ type, title, message, isPaymentFailure });
     setModalVisible(true);
   };
 
@@ -142,10 +155,10 @@ const AddressScreen = () => {
     } else if (statusRes.return_code === 3) {
       showModal('warning', 'Đang chờ thanh toán', 'Giao dịch chưa được thực hiện. Vui lòng thanh toán trên ZaloPay và thử lại.');
     } else {
-      showModal('error', 'Lỗi thanh toán', statusRes.return_message || 'Không xác định được trạng thái giao dịch!');
+      showModal('error', 'Lỗi thanh toán', statusRes.return_message || 'Không xác định được trạng thái giao dịch!', true);
     }
   } catch (err) {
-    showModal('error', 'Lỗi', err.response?.data?.error || err.message || 'Không thể kiểm tra trạng thái!');
+    showModal('error', 'Lỗi', err.response?.data?.error || err.message || 'Không thể kiểm tra trạng thái!', true);
   }
 };
   // --- Gửi đơn hàng ---
@@ -254,13 +267,13 @@ const handleContinue = async () => {
         });
 
         if (initError) {
-          showModal('error', 'Lỗi', `Không thể khởi tạo thanh toán: ${initError.message}`);
+          showModal('error', 'Lỗi', `Không thể khởi tạo thanh toán: ${initError.message}`, true);
           return;
         }
 
         const { error: paymentError } = await presentPaymentSheet();
         if (paymentError) {
-          showModal('error', 'Lỗi', `Thanh toán thất bại: ${paymentError.message}`);
+          showModal('error', 'Lỗi', `Thanh toán thất bại`, true);
           return;
         }
 
@@ -270,7 +283,7 @@ const handleContinue = async () => {
           params,
         });
       } catch (stripeError) {
-        showModal('error', 'Lỗi', `Không thể xử lý thanh toán: ${stripeError.message || 'Vui lòng thử lại'}`);
+        showModal('error', 'Lỗi', `Không thể xử lý thanh toán: ${stripeError.message || 'Vui lòng thử lại'}`, true);
       } finally {
         setPaymentLoading(false);
       }
@@ -308,7 +321,7 @@ const handleContinue = async () => {
           throw new Error('Không nhận được order_url hoặc app_trans_id từ server');
         }
       } catch (zalopayError) {
-        showModal('error', 'Lỗi', `Không thể xử lý thanh toán ZaloPay: ${zalopayError.message || 'Vui lòng thử lại'}`);
+        showModal('error', 'Lỗi', `Không thể xử lý thanh toán ZaloPay: ${zalopayError.message || 'Vui lòng thử lại'}`, true);
       } finally {
         setPaymentLoading(false);
       }
@@ -387,6 +400,9 @@ useEffect(() => {
         style={styles.container}
         contentContainerStyle={{ paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -407,33 +423,23 @@ useEffect(() => {
             <Text style={{ color: '#999' }}>Chưa có địa chỉ. Vui lòng thêm mới!</Text>
           ) : (
             <>
-              {addresses.map(addr => (
-                <TouchableOpacity
-                  key={addr._id}
-                  style={[
-                    styles.addressItem,
-                    selectedAddress?._id === addr._id && styles.selectedAddress,
-                  ]}
-                  onPress={() => setSelectedAddress(addr)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons
-                    name={selectedAddress?._id === addr._id ? 'radio-button-on' : 'radio-button-off'}
-                    size={18}
-                    color={selectedAddress?._id === addr._id ? '#ee4d2d' : '#aaa'}
-                    style={{ marginRight: 7 }}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: '600', color: '#2c2c2c' }}>
-                      {addr.name || 'Tên người nhận'} | {addr.sdt}
-                    </Text>
-                    <Text style={{ color: '#666' }}>{addr.address}</Text>
-                    {addr.isDefault && (
-                      <Text style={{ fontSize: 12, color: '#27ae60' }}>[Mặc định]</Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              ))}
+             {selectedAddress ? (
+  <View style={styles.selectedAddressBox}>
+    <Text style={{ fontWeight: '600', color: '#2c2c2c' }}>
+      {selectedAddress.name} | {selectedAddress.sdt}
+    </Text>
+    <Text style={{ color: '#666', marginTop: 2 }}>{selectedAddress.address}</Text>
+    <TouchableOpacity onPress={() => setAddressModalVisible(true)} style={styles.changeAddressButton}>
+      <Text style={{ color: '#8B5A2B', fontWeight: '600', marginTop: 6 }}>
+        ✏️ Chọn địa chỉ khác
+      </Text>
+    </TouchableOpacity>
+  </View>
+) : (
+  <Text style={{ color: '#999' }}>Chưa có địa chỉ. Vui lòng thêm mới!</Text>
+)}
+
+
             </>
           )}
           <TouchableOpacity style={styles.addButton} onPress={() => router.push('/addressDetail')}>
@@ -590,19 +596,91 @@ useEffect(() => {
         type={modalConfig.type}
         title={modalConfig.title}
         message={modalConfig.message}
-        onClose={() => setModalVisible(false)}
+       onClose={() => {
+        setModalVisible(false);
+        // Nếu modal là lỗi và là lỗi thanh toán thất bại thì mới chuyển qua trang payment
+        if (modalConfig.type === 'error' && modalConfig.isPaymentFailure) {
+          router.replace('/payment');
+        }
+      }}
       />
       {(variantLoading || paymentLoading) && (
           <View style={styles.loadingOverlay}>
             <ActivityIndicator size="large" color="#fff" />
           </View>
         )}
+
+       <Modal
+  visible={addressModalVisible}
+  transparent
+  animationType="slide"
+  onRequestClose={() => setAddressModalVisible(false)}
+>
+  <View style={styles.modalBackdrop}>
+    <View style={styles.addressModalContainer}>
+      {/* Header */}
+      <View style={styles.modalHeader}>
+        <Text style={styles.modalTitle}>📦 Chọn địa chỉ giao hàng</Text>
+        <TouchableOpacity onPress={() => setAddressModalVisible(false)}>
+          <Ionicons name="close" size={24} color="#333" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Danh sách địa chỉ */}
+      <ScrollView style={{ maxHeight: 400 }}>
+        {addresses.map((addr) => {
+          const isSelected = selectedAddress?._id === addr._id;
+          return (
+            <TouchableOpacity
+              key={addr._id}
+              style={[styles.modalAddressItem, isSelected && styles.modalAddressSelected]}
+              onPress={() => {
+                setSelectedAddress(addr);
+                setAddressModalVisible(false);
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={isSelected ? 'radio-button-on' : 'radio-button-off'}
+                size={18}
+                color={isSelected ? '#8B5A2B' : '#aaa'}
+                style={{ marginRight: 10 }}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalName}>{addr.name} | {addr.sdt}</Text>
+                <Text style={styles.modalAddressText}>{addr.address}</Text>
+                {addr.isDefault && (
+                  <Text style={styles.modalDefault}>[Mặc định]</Text>
+                )}
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {/* Footer */}
+      <TouchableOpacity
+        style={styles.addNewAddressBtn}
+        onPress={() => {
+          setAddressModalVisible(false);
+          router.push('/addressDetail');
+        }}
+      >
+        <Ionicons name="add-circle" size={18} color="#8B5A2B" />
+        <Text style={styles.addNewAddressText}>Thêm địa chỉ mới</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
+
+
     </View>
     
   );
 };
 
 const voucherStyles = StyleSheet.create({
+ 
   card: {
     backgroundColor: '#fff',
     borderRadius: 13,
@@ -627,6 +705,95 @@ const voucherStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
+   modalBackdrop: {
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.3)',
+  justifyContent: 'center',
+  alignItems: 'center',
+  padding: 20,
+},
+addressModalContainer: {
+  width: '100%',
+  backgroundColor: '#fff',
+  borderRadius: 16,
+  padding: 18,
+  maxHeight: 500,
+  elevation: 5,
+},
+modalHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 15,
+},
+modalTitle: {
+  fontSize: 18,
+  fontWeight: '700',
+  color: '#2c2c2c',
+},
+modalAddressItem: {
+  flexDirection: 'row',
+  alignItems: 'flex-start',
+  padding: 12,
+  backgroundColor: '#f9f9f9',
+  borderRadius: 10,
+  marginBottom: 10,
+  borderWidth: 1,
+  borderColor: '#eee',
+},
+modalAddressSelected: {
+  backgroundColor: '#fff5ec',
+  borderColor: '#8B5A2B',
+},
+modalName: {
+  fontWeight: '600',
+  color: '#1a1a1a',
+  marginBottom: 3,
+},
+modalAddressText: {
+  color: '#555',
+  fontSize: 14,
+},
+modalDefault: {
+  fontSize: 12,
+  color: '#27ae60',
+  marginTop: 3,
+},
+addNewAddressBtn: {
+  marginTop: 10,
+  flexDirection: 'row',
+  alignItems: 'center',
+  alignSelf: 'flex-start',
+},
+addNewAddressText: {
+  marginLeft: 6,
+  color: '#8B5A2B',
+  fontWeight: '600',
+  fontSize: 14,
+},
+
+  selectedAddressBox: {
+  backgroundColor: '#fdfdfd',
+  padding: 12,
+  borderRadius: 10,
+  borderColor: '#eee',
+  borderWidth: 1,
+},
+changeAddressButton: {
+  marginTop: 6,
+},
+modalOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.3)',
+  justifyContent: 'center',
+  paddingHorizontal: 20,
+},
+modalContent: {
+  backgroundColor: '#fff',
+  borderRadius: 16,
+  padding: 20,
+  elevation: 6,
+},
   loadingOverlay: {
   position: 'absolute',
   top: 0, left: 0, right: 0, bottom: 0,
