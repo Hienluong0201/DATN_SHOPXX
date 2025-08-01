@@ -10,6 +10,8 @@ import { useAuth } from '../store/useAuth';
 import { useProducts } from '../store/useProducts';
 import CustomModal from './components/CustomModal';
 import { useStripe } from '@stripe/stripe-react-native';
+import { AppState } from 'react-native';
+import { RefreshControl } from 'react-native';
 
 // --- Utils ---
 const extractProvince = (addressString) => {
@@ -46,11 +48,25 @@ const AddressScreen = () => {
     type: 'error',
     title: '',
     message: '',
+    isPaymentFailure: false,
   });
+  const [zaloAppTransId, setZaloAppTransId] = useState(null);
+  const [zaloOrderId, setZaloOrderId] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [addressModalVisible, setAddressModalVisible] = useState(false);
+  // Hàm làm mới 
+  const onRefresh = async () => {
+  setRefreshing(true);
+  await Promise.all([
+    fetchAddresses(),
+    fetchVouchers(),
+  ]);
+  setRefreshing(false);
+};
 
   // --- Show modal lỗi/thành công ---
-  const showModal = (type, title, message) => {
-    setModalConfig({ type, title, message });
+  const showModal = (type, title, message, isPaymentFailure = false) => {
+    setModalConfig({ type, title, message, isPaymentFailure });
     setModalVisible(true);
   };
 
@@ -123,43 +139,59 @@ const AddressScreen = () => {
     { id: 'credit_card', name: 'Thẻ tín dụng/Thẻ ghi nợ', gateway: 'Stripe' },
     { id: 'zalopay', name: 'Thanh toán bằng ZaloPay', gateway: 'ZaloPay' },
   ];
+  //Kiểm tra trạng thái thanh toán zalo pay
+  const checkZaloPayStatus = async (app_trans_id, orderId) => {
+  try {
+    // Gọi API backend kiểm tra trạng thái ZaloPay, truyền cả orderId để backend xử lý auto-cancel
+    const statusRes = await AxiosInstance().post('/order/zalopay-status', {
+      app_trans_id,
+      orderId         // Thêm dòng này!
+    });
+    console.log('Kết quả check trạng thái ZaloPay:', statusRes);
 
+    if (statusRes.return_code === 1) {
+      showModal('success', 'Thanh toán thành công', 'Giao dịch của bạn đã được xử lý!');
+      // router.push({pathname: '/checkout', params: ...});
+    } else if (statusRes.return_code === 3) {
+      showModal('warning', 'Đang chờ thanh toán', 'Giao dịch chưa được thực hiện. Vui lòng thanh toán trên ZaloPay và thử lại.');
+    } else {
+      showModal('error', 'Lỗi thanh toán', statusRes.return_message || 'Không xác định được trạng thái giao dịch!', true);
+    }
+  } catch (err) {
+    showModal('error', 'Lỗi', err.response?.data?.error || err.message || 'Không thể kiểm tra trạng thái!', true);
+  }
+};
   // --- Gửi đơn hàng ---
 const handleContinue = async () => {
   if (!selectedAddress) {
-    console.log('Lỗi: Không có địa chỉ được chọn', { selectedAddress });
     showModal('error', 'Lỗi', 'Vui lòng chọn địa chỉ giao hàng!');
     return;
   }
   if (products.length === 0) {
-    console.log('Lỗi: Không có sản phẩm được chọn', { products });
     showModal('error', 'Lỗi', 'Không có sản phẩm nào được chọn!');
     return;
   }
   if (!selectedPaymentMethod) {
-    console.log('Lỗi: Không có phương thức thanh toán được chọn', { selectedPaymentMethod });
     showModal('error', 'Lỗi', 'Vui lòng chọn phương thức thanh toán!');
     return;
   }
   if (selectedVoucher && productsTotal < selectedVoucher.minOrderValue) {
-    console.log('Lỗi: Voucher không áp dụng', { productsTotal, minOrderValue: selectedVoucher.minOrderValue });
     showModal('error', 'Voucher không áp dụng', `Đơn hàng tối thiểu phải từ ${selectedVoucher.minOrderValue.toLocaleString('vi-VN')}đ để sử dụng voucher này!`);
     return;
   }
 
   setVariantLoading(true);
   try {
+    // Chuẩn bị order items
     const orderItems = await Promise.all(
       products.map(async (item) => {
         let variantID = item.variantID;
         if (!variantID) {
           const variants = await fetchProductVariants(item.productId);
-          console.log('Variants fetched for product:', item.productId, variants);
           const selectedVariant = variants.find(
             (variant) => variant.color === item.color && variant.size === item.size
           ) || variants[0];
           variantID = selectedVariant?._id || '683da229786c576173343579';
-          console.log('Selected Variant ID:', variantID, { color: item.color, size: item.size });
         }
         return {
           variantID,
@@ -170,7 +202,6 @@ const handleContinue = async () => {
         };
       })
     );
-    console.log('Order Items:', orderItems);
 
     const orderPayload = {
       userID: user._id,
@@ -186,20 +217,16 @@ const handleContinue = async () => {
       totalAmount,
       voucherCode: selectedVoucher?.code,
     };
-    console.log('Order Payload:', orderPayload);
 
     const orderResponse = await AxiosInstance().post('/order/checkout', orderPayload);
-    console.log('Order Response:', orderResponse);
 
-    // Sửa kiểm tra orderId
     if (!orderResponse.order?._id) {
-      console.error('Lỗi: Không nhận được orderId từ server', orderResponse);
       showModal('error', 'Lỗi', 'Không thể tạo đơn hàng. Vui lòng thử lại.');
       return;
     }
 
     const params = {
-      orderId: orderResponse.order._id, // Sửa từ orderResponse._id
+      orderId: orderResponse.order._id,
       selectedAddress: JSON.stringify(selectedAddress),
       selectedProducts: JSON.stringify(products),
       shippingFee: shippingFee.toString(),
@@ -208,34 +235,29 @@ const handleContinue = async () => {
       totalAmount: totalAmount.toString(),
       paymentStatus: selectedPaymentMethod.id === 'credit_card' ? 'completed' : selectedPaymentMethod.id === 'zalopay' ? 'pending' : 'pending',
     };
-    console.log('Params gửi sang Checkout:', params);
 
+    // Tiền mặt khi nhận hàng
     if (selectedPaymentMethod.id === 'cash') {
-      console.log('Chuyển hướng đến Checkout với thanh toán Cash', params);
-      router.push({
+      router.replace({
         pathname: '/checkout',
         params,
       });
-    } else if (selectedPaymentMethod.id === 'credit_card') {
+      return;
+    }
+
+    // Thanh toán Stripe (Credit Card)
+    if (selectedPaymentMethod.id === 'credit_card') {
       try {
         setPaymentLoading(true);
         const stripePayload = {
-          orderId: orderResponse.order._id, // Sửa từ orderResponse._id
+          orderId: orderResponse.order._id,
           amount: totalAmount,
           currency: 'vnd',
         };
-        console.log('Gửi yêu cầu Stripe:', stripePayload);
         const stripeResponse = await AxiosInstance().post('/order/stripe-payment-intent', stripePayload);
-        console.log('Phản hồi Stripe:', stripeResponse);
-
         const { clientSecret, error } = stripeResponse;
-        if (error) {
-          console.error('Lỗi Stripe từ server:', error);
-          throw new Error(error);
-        }
-        if (!clientSecret) {
-          console.error('Lỗi: Không nhận được clientSecret từ server', stripeResponse);
-          throw new Error('Không nhận được clientSecret từ server');
+        if (error || !clientSecret) {
+          throw new Error(error || 'Không nhận được clientSecret từ server');
         }
 
         const { error: initError } = await initPaymentSheet({
@@ -243,86 +265,86 @@ const handleContinue = async () => {
           merchantDisplayName: 'Your Shop Name',
           allowsDelayedPaymentMethods: true,
         });
-        console.log('Init Payment Sheet:', { initError });
 
         if (initError) {
-          console.error('Lỗi khởi tạo Payment Sheet:', initError);
-          showModal('error', 'Lỗi', `Không thể khởi tạo thanh toán: ${initError.message}`);
+          showModal('error', 'Lỗi', `Không thể khởi tạo thanh toán: ${initError.message}`, true);
           return;
         }
 
         const { error: paymentError } = await presentPaymentSheet();
-        console.log('Present Payment Sheet:', { paymentError });
-
         if (paymentError) {
-          console.error('Lỗi hiển thị Payment Sheet:', paymentError);
-          showModal('error', 'Lỗi', `Thanh toán thất bại: ${paymentError.message}`);
+          showModal('error', 'Lỗi', `Thanh toán thất bại`, true);
           return;
         }
 
-        console.log('Thanh toán Stripe thành công');
         showModal('success', 'Thành công', 'Thanh toán đã được xử lý thành công!');
         router.push({
           pathname: '/checkout',
           params,
         });
       } catch (stripeError) {
-        console.error('Lỗi xử lý thanh toán Stripe:', stripeError);
-        showModal('error', 'Lỗi', `Không thể xử lý thanh toán: ${stripeError.message || 'Vui lòng thử lại'}`);
+        showModal('error', 'Lỗi', `Không thể xử lý thanh toán: ${stripeError.message || 'Vui lòng thử lại'}`, true);
       } finally {
         setPaymentLoading(false);
       }
-    } else if (selectedPaymentMethod.id === 'zalopay') {
+      return;
+    }
+
+    // Thanh toán ZaloPay
+    if (selectedPaymentMethod.id === 'zalopay') {
       try {
         setPaymentLoading(true);
         const zalopayPayload = {
-          orderId: orderResponse.order._id, // Sửa từ orderResponse._id
+          orderId: orderResponse.order._id,
           amount: totalAmount,
           currency: 'vnd',
         };
-        console.log('Gửi yêu cầu ZaloPay:', zalopayPayload);
         const zalopayResponse = await AxiosInstance().post('/order/zalopay', zalopayPayload);
-        console.log('Phản hồi ZaloPay:', zalopayResponse);
 
-        const { order_url, return_code, return_message } = zalopayResponse;
+        const { order_url, return_code, return_message, app_trans_id } = zalopayResponse;
         if (return_code !== 1) {
-          console.error('Lỗi ZaloPay:', { return_code, return_message });
           throw new Error(return_message || 'Không thể tạo giao dịch ZaloPay');
         }
 
-        if (order_url) {
+        if (order_url && app_trans_id) {
+          setZaloAppTransId(app_trans_id); // <-- Lưu app_trans_id để auto check khi quay lại app!
+          setZaloOrderId(orderResponse.order._id);
           const canOpen = await Linking.canOpenURL(order_url);
-          console.log('Can open ZaloPay URL:', canOpen);
           if (canOpen) {
             await Linking.openURL(order_url);
-            console.log('Đã mở URL ZaloPay:', order_url);
             showModal('success', 'Thành công', 'Đã mở ứng dụng ZaloPay để thanh toán!');
-            router.push({
-              pathname: '/checkout',
-              params,
-            });
+            // KHÔNG push sang checkout ở đây nữa, để check trạng thái tự động!
           } else {
-            console.error('Lỗi: Không thể mở ứng dụng ZaloPay');
             throw new Error('Không thể mở ứng dụng ZaloPay');
           }
         } else {
-          console.error('Lỗi: Không nhận được order_url từ server', zalopayResponse);
-          throw new Error('Không nhận được order_url từ server');
+          throw new Error('Không nhận được order_url hoặc app_trans_id từ server');
         }
       } catch (zalopayError) {
-        console.error('Lỗi xử lý thanh toán ZaloPay:', zalopayError);
-        showModal('error', 'Lỗi', `Không thể xử lý thanh toán ZaloPay: ${zalopayError.message || 'Vui lòng thử lại'}`);
+        showModal('error', 'Lỗi', `Không thể xử lý thanh toán ZaloPay: ${zalopayError.message || 'Vui lòng thử lại'}`, true);
       } finally {
         setPaymentLoading(false);
       }
+      return;
     }
+
   } catch (err) {
-    console.error('Lỗi tạo đơn hàng:', err.response?.data || err.message);
-    showModal('error', 'Lỗi', err.response?.data?.message || 'Không thể tạo đơn hàng. Vui lòng thử lại.');
+    showModal('error', 'Lỗi', err.response?.data?.message || err.message || 'Không thể tạo đơn hàng. Vui lòng thử lại.');
   } finally {
     setVariantLoading(false);
   }
 };
+//check thanh toán
+useEffect(() => {
+  if (!zaloAppTransId || !zaloOrderId) return;
+  const subscription = AppState.addEventListener('change', (nextAppState) => {
+    if (nextAppState === 'active' && zaloAppTransId && zaloOrderId) {
+      checkZaloPayStatus(zaloAppTransId, zaloOrderId);
+    }
+  });
+  return () => subscription.remove();
+}, [zaloAppTransId, zaloOrderId]);
+
   // --- UI chọn voucher ---
   const renderVoucher = ({ item }) => {
     const expired = !item.isActive || (new Date(item.validTo) < new Date());
@@ -378,6 +400,9 @@ const handleContinue = async () => {
         style={styles.container}
         contentContainerStyle={{ paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -398,33 +423,23 @@ const handleContinue = async () => {
             <Text style={{ color: '#999' }}>Chưa có địa chỉ. Vui lòng thêm mới!</Text>
           ) : (
             <>
-              {addresses.map(addr => (
-                <TouchableOpacity
-                  key={addr._id}
-                  style={[
-                    styles.addressItem,
-                    selectedAddress?._id === addr._id && styles.selectedAddress,
-                  ]}
-                  onPress={() => setSelectedAddress(addr)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons
-                    name={selectedAddress?._id === addr._id ? 'radio-button-on' : 'radio-button-off'}
-                    size={18}
-                    color={selectedAddress?._id === addr._id ? '#ee4d2d' : '#aaa'}
-                    style={{ marginRight: 7 }}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: '600', color: '#2c2c2c' }}>
-                      {addr.name || 'Tên người nhận'} | {addr.sdt}
-                    </Text>
-                    <Text style={{ color: '#666' }}>{addr.address}</Text>
-                    {addr.isDefault && (
-                      <Text style={{ fontSize: 12, color: '#27ae60' }}>[Mặc định]</Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              ))}
+             {selectedAddress ? (
+  <View style={styles.selectedAddressBox}>
+    <Text style={{ fontWeight: '600', color: '#2c2c2c' }}>
+      {selectedAddress.name} | {selectedAddress.sdt}
+    </Text>
+    <Text style={{ color: '#666', marginTop: 2 }}>{selectedAddress.address}</Text>
+    <TouchableOpacity onPress={() => setAddressModalVisible(true)} style={styles.changeAddressButton}>
+      <Text style={{ color: '#8B5A2B', fontWeight: '600', marginTop: 6 }}>
+        ✏️ Chọn địa chỉ khác
+      </Text>
+    </TouchableOpacity>
+  </View>
+) : (
+  <Text style={{ color: '#999' }}>Chưa có địa chỉ. Vui lòng thêm mới!</Text>
+)}
+
+
             </>
           )}
           <TouchableOpacity style={styles.addButton} onPress={() => router.push('/addressDetail')}>
@@ -467,7 +482,7 @@ const handleContinue = async () => {
                 Danh sách Voucher
               </Text>
               <FlatList
-                data={vouchers}
+                  data={vouchers.filter(v => v.isActive)}
                 keyExtractor={item => item._id}
                 renderItem={renderVoucher}
                 ListEmptyComponent={<Text style={{ color: '#999', textAlign: 'center', padding: 25 }}>Không có voucher</Text>}
@@ -512,9 +527,6 @@ const handleContinue = async () => {
         {/* Đơn hàng */}
         <View style={styles.orderSection}>
           <Text style={styles.sectionTitle}>Đơn hàng của bạn</Text>
-          {variantLoading || paymentLoading ? (
-            <ActivityIndicator size="small" color="#8B5A2B" style={{ marginVertical: 8 }} />
-          ) : null}
           {products.length === 0 ? (
             <Text style={{ color: '#999', padding: 15 }}>Không có sản phẩm nào được chọn.</Text>
           ) : (
@@ -584,13 +596,91 @@ const handleContinue = async () => {
         type={modalConfig.type}
         title={modalConfig.title}
         message={modalConfig.message}
-        onClose={() => setModalVisible(false)}
+       onClose={() => {
+        setModalVisible(false);
+        // Nếu modal là lỗi và là lỗi thanh toán thất bại thì mới chuyển qua trang payment
+        if (modalConfig.type === 'error' && modalConfig.isPaymentFailure) {
+          router.replace('/payment');
+        }
+      }}
       />
+      {(variantLoading || paymentLoading) && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color="#fff" />
+          </View>
+        )}
+
+       <Modal
+  visible={addressModalVisible}
+  transparent
+  animationType="slide"
+  onRequestClose={() => setAddressModalVisible(false)}
+>
+  <View style={styles.modalBackdrop}>
+    <View style={styles.addressModalContainer}>
+      {/* Header */}
+      <View style={styles.modalHeader}>
+        <Text style={styles.modalTitle}>📦 Chọn địa chỉ giao hàng</Text>
+        <TouchableOpacity onPress={() => setAddressModalVisible(false)}>
+          <Ionicons name="close" size={24} color="#333" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Danh sách địa chỉ */}
+      <ScrollView style={{ maxHeight: 400 }}>
+        {addresses.map((addr) => {
+          const isSelected = selectedAddress?._id === addr._id;
+          return (
+            <TouchableOpacity
+              key={addr._id}
+              style={[styles.modalAddressItem, isSelected && styles.modalAddressSelected]}
+              onPress={() => {
+                setSelectedAddress(addr);
+                setAddressModalVisible(false);
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={isSelected ? 'radio-button-on' : 'radio-button-off'}
+                size={18}
+                color={isSelected ? '#8B5A2B' : '#aaa'}
+                style={{ marginRight: 10 }}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalName}>{addr.name} | {addr.sdt}</Text>
+                <Text style={styles.modalAddressText}>{addr.address}</Text>
+                {addr.isDefault && (
+                  <Text style={styles.modalDefault}>[Mặc định]</Text>
+                )}
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {/* Footer */}
+      <TouchableOpacity
+        style={styles.addNewAddressBtn}
+        onPress={() => {
+          setAddressModalVisible(false);
+          router.push('/addressDetail');
+        }}
+      >
+        <Ionicons name="add-circle" size={18} color="#8B5A2B" />
+        <Text style={styles.addNewAddressText}>Thêm địa chỉ mới</Text>
+      </TouchableOpacity>
     </View>
+  </View>
+</Modal>
+
+
+    </View>
+    
   );
 };
 
 const voucherStyles = StyleSheet.create({
+ 
   card: {
     backgroundColor: '#fff',
     borderRadius: 13,
@@ -615,6 +705,103 @@ const voucherStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
+   modalBackdrop: {
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.3)',
+  justifyContent: 'center',
+  alignItems: 'center',
+  padding: 20,
+},
+addressModalContainer: {
+  width: '100%',
+  backgroundColor: '#fff',
+  borderRadius: 16,
+  padding: 18,
+  maxHeight: 500,
+  elevation: 5,
+},
+modalHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 15,
+},
+modalTitle: {
+  fontSize: 18,
+  fontWeight: '700',
+  color: '#2c2c2c',
+},
+modalAddressItem: {
+  flexDirection: 'row',
+  alignItems: 'flex-start',
+  padding: 12,
+  backgroundColor: '#f9f9f9',
+  borderRadius: 10,
+  marginBottom: 10,
+  borderWidth: 1,
+  borderColor: '#eee',
+},
+modalAddressSelected: {
+  backgroundColor: '#fff5ec',
+  borderColor: '#8B5A2B',
+},
+modalName: {
+  fontWeight: '600',
+  color: '#1a1a1a',
+  marginBottom: 3,
+},
+modalAddressText: {
+  color: '#555',
+  fontSize: 14,
+},
+modalDefault: {
+  fontSize: 12,
+  color: '#27ae60',
+  marginTop: 3,
+},
+addNewAddressBtn: {
+  marginTop: 10,
+  flexDirection: 'row',
+  alignItems: 'center',
+  alignSelf: 'flex-start',
+},
+addNewAddressText: {
+  marginLeft: 6,
+  color: '#8B5A2B',
+  fontWeight: '600',
+  fontSize: 14,
+},
+
+  selectedAddressBox: {
+  backgroundColor: '#fdfdfd',
+  padding: 12,
+  borderRadius: 10,
+  borderColor: '#eee',
+  borderWidth: 1,
+},
+changeAddressButton: {
+  marginTop: 6,
+},
+modalOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.3)',
+  justifyContent: 'center',
+  paddingHorizontal: 20,
+},
+modalContent: {
+  backgroundColor: '#fff',
+  borderRadius: 16,
+  padding: 20,
+  elevation: 6,
+},
+  loadingOverlay: {
+  position: 'absolute',
+  top: 0, left: 0, right: 0, bottom: 0,
+  backgroundColor: 'rgba(0,0,0,0.35)',
+  justifyContent: 'center',
+  alignItems: 'center',
+  zIndex: 9999,
+},
   rootContainer: { flex: 1, backgroundColor: '#f0f2f5' ,marginTop : 40},
   container: { flex: 1, padding: 20, backgroundColor: '#f0f2f5' },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },

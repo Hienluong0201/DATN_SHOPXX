@@ -120,20 +120,21 @@ export default function HomeScreen() {
     }
   };
 
-  const handleConfirmVariant = async (variantId: string) => {
+    const handleConfirmVariant = async (variantId: string, quantity: number) => {
     if (!user?._id || !currentProduct) return;
 
     try {
       await AxiosInstance().post('/cart', {
         userID: user._id,
         productVariant: variantId,
-        soluong: 1,
+        soluong: quantity,
       });
       showModal('success', 'Thành công', `${currentProduct.Name} đã được thêm vào giỏ hàng!`);
     } catch (err: any) {
       showModal('error', 'Lỗi', err?.response?.data?.message || 'Không thể thêm vào giỏ hàng.');
     }
   };
+
 
   const addToCartServer = async (product: any) => {
     if (!user?._id) {
@@ -254,7 +255,7 @@ export default function HomeScreen() {
   const renderItem = ({ item }: any) => {
     switch (item.type) {
       case 'search':
-        return <SearchComponent onFilterPress={() => setFilterModalVisible(true)} />;
+        return <SearchComponent onFilterPress={() => router.push('/AdvancedFilterScreen')} />
       case 'banner':
         return (
           <BannerComponent

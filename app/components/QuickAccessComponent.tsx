@@ -15,9 +15,9 @@ export default function QuickAccessComponent() {
         <Ionicons name="heart" size={28} color="#FF5161" />
         <Text style={styles.quickAccessLabel}>Yêu thích</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.quickAccessItem} onPress={() => router.push('./video')}>
+      <TouchableOpacity style={styles.quickAccessItem} onPress={() => router.push('./privacy')}>
         <Ionicons name="receipt" size={28} color="#4287f5" />
-        <Text style={styles.quickAccessLabel}>Video</Text>
+        <Text style={styles.quickAccessLabel}>Voucher</Text>
       </TouchableOpacity>
     </View>
   );

@@ -15,13 +15,13 @@ const CategoryScreen = () => {
     <TouchableOpacity
       style={styles.categoryCard}
       onPress={() => router.push({ pathname: './products', params: { categoryId: item.CategoryID } })}
+      activeOpacity={0.8}
     >
       <View style={styles.iconWrapper}>
         <Image
-          source={{
-            uri: 'https://via.placeholder.com/80/eee?text=' + encodeURIComponent(item.Name),
-          }}
+          source={item.Icon}
           style={styles.categoryIcon}
+          resizeMode="contain"
         />
       </View>
       <Text style={styles.categoryName}>{item.Name}</Text>
@@ -44,14 +44,17 @@ const CategoryScreen = () => {
         numColumns={2}
         columnWrapperStyle={{ justifyContent: 'space-between' }}
         contentContainerStyle={{ padding: 15 }}
-        ListEmptyComponent={loading ? <Text>Đang tải...</Text> : <Text>Không có danh mục.</Text>}
+        ListEmptyComponent={
+          loading ? <Text>Đang tải...</Text> : <Text>Không có danh mục.</Text>
+        }
+        showsVerticalScrollIndicator={false}
       />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', marginTop : 20 },
+  container: { flex: 1, backgroundColor: '#fff', marginTop: 20 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -74,10 +77,25 @@ const styles = StyleSheet.create({
     padding: 14,
     flex: 1,
     marginHorizontal: 5,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.07,
+    shadowRadius: 7,
+    shadowOffset: { width: 0, height: 2 },
   },
-  iconWrapper: { marginBottom: 8 },
-  categoryIcon: { width: 70, height: 70, borderRadius: 35 },
-  categoryName: { fontSize: 15, fontWeight: '500', color: '#633' },
+  iconWrapper: {
+    marginBottom: 8,
+    backgroundColor: '#fff',
+    borderRadius: 40,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    padding: 7,
+  },
+  categoryIcon: { width: 60, height: 60, borderRadius: 16 },
+  categoryName: { fontSize: 15, fontWeight: '500', color: '#633', marginTop: 7 },
 });
 
 export default CategoryScreen;

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback ,useMemo} from 'react';
 import {
   View,
   Text,
@@ -18,7 +18,8 @@ import { Ionicons } from '@expo/vector-icons';
 import RenderHtml from 'react-native-render-html';
 import { useWindowDimensions } from 'react-native';
 import CustomModal from './components/CustomModal'; // Import CustomModal (đảm bảo đường dẫn đúng)
-
+import { Video } from 'expo-av';
+import { KeyboardAvoidingView, Platform } from 'react-native';
 // Hàm gọi API thêm vào giỏ hàng
 const addToCartAPI = async (userID, productVariant, soluong) => {
   try {
@@ -52,21 +53,31 @@ const sendReviewAPI = async ({ userID, productID, rating, comment }) => {
 };
 
 const ProductDetail = () => {
-  const { productId } = useLocalSearchParams();
-  const { getProductById, addToCart, fetchProductVariants, loading, error } = useProducts();
+const { productId } = useLocalSearchParams();
+const id = Array.isArray(productId) ? productId[0] : productId;
+const { getProductById, addToCart, fetchProductVariants, loading, error } = useProducts()
   const [product, setProduct] = useState(null);
   const [variants, setVariants] = useState([]);
   const [selectedVariant, setSelectedVariant] = useState(null);
-  const [quantity, setQuantity] = useState(1);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const { user } = useAuth();
   const [reviews, setReviews] = useState([]);
   const [reviewTab, setReviewTab] = useState(0);
   const { width } = useWindowDimensions();
-  // Review form state
-  const [reviewComment, setReviewComment] = useState('');
-  const [reviewRating, setReviewRating] = useState(5);
-  const [sendingReview, setSendingReview] = useState(false);
+  const [quantity, setQuantity] = useState(1);
+const [quantityInput, setQuantityInput] = useState('1');
+  const [currentIndex, setCurrentIndex] = useState(0);
+ const gallery = useMemo(() => {
+  if (!product) return [];
+  return [
+    ...(Array.isArray(product.Videos) && product.Videos.length > 0
+      ? product.Videos.map((v) => ({ type: 'video', url: v }))
+      : []),
+    ...(Array.isArray(product.Images) && product.Images.length > 0
+      ? product.Images.map((img) => ({ type: 'image', url: img }))
+      : [{ type: 'image', url: product.Image }]),
+  ];
+}, [product]);
 
   // State để quản lý CustomModal
   const [modalVisible, setModalVisible] = useState(false);
@@ -97,32 +108,28 @@ const ProductDetail = () => {
   };
 
   // Lấy dữ liệu sản phẩm, biến thể, review
-    const loadData = useCallback(async () => {
-      if (!productId || typeof productId !== 'string' || isDataLoaded) return;
-      setIsDataLoaded(false);
-      try {
-        const fetchedProduct = getProductById(productId);
-        console.log("Ảnh sản phẩm:", fetchedProduct?.Images || fetchedProduct?.images);
-        const fetchedVariants = await fetchProductVariants(productId);
-
-        // Gọi API lấy review
-        let reviewData = [];
-        try {
-          reviewData = await AxiosInstance().get(`/review/product/${productId}`);
-          // console.log("du lieu anh " , reviewData)
-          setReviews(reviewData || []);
-        } catch (err) {
-          setReviews([]);
-        }
-
-        setProduct(fetchedProduct || null);
-        setVariants(fetchedVariants || []);
-        setSelectedVariant(fetchedVariants.length ? fetchedVariants[0] : null);
-        setIsDataLoaded(true);
-      } catch (err) {
-        setIsDataLoaded(true);
-      }
-    }, [productId, getProductById, fetchProductVariants, isDataLoaded]);
+  const loadData = useCallback(async () => {
+  if (!id || typeof id !== 'string' || isDataLoaded) return;
+  setIsDataLoaded(false);
+  try {
+    // Ví dụ fetch API sản phẩm detail
+    const fetchedProduct = getProductById ? getProductById(id) : null;
+    const fetchedVariants = await fetchProductVariants(id);
+    let reviewData = [];
+    try {
+      reviewData = await AxiosInstance().get(`/review/product/${id}`);
+      setReviews(reviewData || []);
+    } catch (err) {
+      setReviews([]);
+    }
+    setProduct(fetchedProduct || null);
+    setVariants(fetchedVariants || []);
+    setSelectedVariant(fetchedVariants.length ? fetchedVariants[0] : null);
+    setIsDataLoaded(true);
+  } catch (err) {
+    setIsDataLoaded(true);
+  }
+}, [id, getProductById, fetchProductVariants, isDataLoaded]);
 
   // Reload lại data sau khi gửi review thành công
   const reloadReview = async () => {
@@ -195,34 +202,6 @@ const ProductDetail = () => {
     }
   }, [product, selectedVariant, quantity, user]);
 
-  // Gửi review
-  const handleSendReview = async () => {
-    if (!user || !user._id) {
-      showModal('warning', 'Thông báo', 'Bạn cần đăng nhập để đánh giá!');
-      return;
-    }
-    if (!reviewComment.trim()) {
-      showModal('warning', 'Thông báo', 'Vui lòng nhập nội dung đánh giá!');
-      return;
-    }
-    setSendingReview(true);
-    try {
-      await sendReviewAPI({
-        userID: user._id,
-        productID: productId,
-        rating: reviewRating,
-        comment: reviewComment.trim(),
-      });
-      showModal('success', 'Thành công', 'Đánh giá đã gửi thành công!');
-      setReviewComment('');
-      setReviewRating(5);
-      reloadReview();
-    } catch (err) {
-      showModal('error', 'Lỗi', err?.message || 'Không gửi được đánh giá.');
-    }
-    setSendingReview(false);
-  };
-
   // UI
   if (!isDataLoaded || loading) {
     return (
@@ -244,6 +223,7 @@ const ProductDetail = () => {
   if (variants.length === 0) {
     return (
       <View style={styles.container}>
+        
         <ScrollView contentContainerStyle={{ paddingBottom: 70 }}>
           <Image source={{ uri: product.Image }} style={styles.image} />
           <View style={styles.details}>
@@ -284,30 +264,61 @@ const ProductDetail = () => {
     variants.filter((v) => v.color === color).map((v) => v.size);
 
   return (
-    <View style={styles.container}>
+     <View style={styles.container}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 10 }}>
+           {/* Nút Back */}
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+
+          {/* Icon Giỏ Hàng */}
+          <TouchableOpacity onPress={() => router.push('/home/cart')}>
+            <Ionicons name="cart-outline" size={24} color="#333" />
+          </TouchableOpacity>
+        </View>
+          <KeyboardAvoidingView
+    style={{ flex: 1 }}
+    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 40}
+  >
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 70 }}
+        contentContainerStyle={{ paddingBottom: 80 }}
       >
         {/* Ảnh sản phẩm */}
-        <FlatList
-            data={product.Images || [product.Image]}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(_, index) => index.toString()}
-            renderItem={({ item }) => (
-              <Image
-                source={{ uri: item }}
-                style={{
-                  width: width, // lấy width từ useWindowDimensions()
-                  height: 350,
-                  resizeMode: 'contain',
-                  backgroundColor: '#f5f5f5',
-                }}
-              />
-            )}
-          />
+      <FlatList
+        data={gallery}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(_, index) => index.toString()}
+        removeClippedSubviews={false}
+        windowSize={2}
+        initialNumToRender={1}
+        onMomentumScrollEnd={e => {
+          const newIndex = Math.round(e.nativeEvent.contentOffset.x / width);
+          setCurrentIndex(newIndex);
+        }}
+        renderItem={({ item, index }) =>
+          item.type === 'video' ? (
+            <Video
+              source={{ uri: item.url }}
+              useNativeControls
+              resizeMode="contain"
+              style={{ width: width, height: 350, backgroundColor: '#000' }}
+              onPlaybackStatusUpdate={status => {
+                console.log('Video status:', status);
+                if (status.isPlaying) console.log('User played video');
+              }}
+            />
+          ) : (
+            <Image
+              source={{ uri: item.url }}
+              style={{ width: width, height: 350, resizeMode: 'contain', backgroundColor: '#f5f5f5' }}
+            />
+          )
+        }
+      />      
         <View style={styles.details}>
           <Text style={styles.name}>{product.Name}</Text>
           <View style={styles.priceContainer}>
@@ -402,38 +413,48 @@ const ProductDetail = () => {
           {selectedVariant && (
             <>
               <Text style={styles.section}>Số lượng</Text>
-              <View style={styles.quantityContainer}>
-                <TouchableOpacity
-                  style={styles.quantityButton}
-                  onPress={() => setQuantity((prev) => Math.max(1, prev - 1))}
-                  disabled={quantity <= 1}
-                >
-                  <Text style={styles.quantityButtonText}>-</Text>
-                </TouchableOpacity>
-                <TextInput
-                  style={styles.quantityInput}
-                  value={quantity.toString()}
-                  keyboardType="numeric"
-                  onChangeText={(text) => {
-                    const num = parseInt(text) || 1;
-                    if (num <= (selectedVariant?.stock || 1)) setQuantity(num);
-                  }}
-                />
-                <TouchableOpacity
-                  style={styles.quantityButton}
-                  onPress={() =>
-                    setQuantity((prev) =>
-                      prev < (selectedVariant?.stock || 1) ? prev + 1 : prev
-                    )
-                  }
-                  disabled={quantity >= (selectedVariant?.stock || 1)}
-                >
-                  <Text style={styles.quantityButtonText}>+</Text>
-                </TouchableOpacity>
-                <Text style={styles.stockText}>
-                  Tồn kho: {selectedVariant?.stock || 0}
-                </Text>
-              </View>
+          <View style={styles.quantityContainer}>
+            <TouchableOpacity
+              style={styles.quantityButton}
+              onPress={() => {
+                const next = Math.max(1, quantity - 1);
+                setQuantity(next);
+                setQuantityInput(next.toString());
+              }}
+              disabled={quantity <= 1}
+            >
+              <Text style={styles.quantityButtonText}>-</Text>
+            </TouchableOpacity>
+            <TextInput
+              style={[styles.quantityInput, { paddingTop: 5 }]}
+              value={quantityInput}
+              keyboardType="numeric"
+              onChangeText={(text) => {
+                if (/^\d*$/.test(text)) setQuantityInput(text);
+              }}
+              onEndEditing={() => {
+                let num = parseInt(quantityInput, 10);
+                if (isNaN(num) || num < 1) num = 1;
+                if (num > (selectedVariant?.stock || 1)) num = selectedVariant?.stock || 1;
+                setQuantity(num);
+                setQuantityInput(num.toString());
+              }}
+            />
+            <TouchableOpacity
+              style={styles.quantityButton}
+              onPress={() => {
+                const next = Math.min(quantity + 1, selectedVariant?.stock || 1);
+                setQuantity(next);
+                setQuantityInput(next.toString());
+              }}
+              disabled={quantity >= (selectedVariant?.stock || 1)}
+            >
+              <Text style={styles.quantityButtonText}>+</Text>
+            </TouchableOpacity>
+            <Text style={styles.stockText}>
+              Tồn kho: {selectedVariant?.stock || 0}
+            </Text>
+          </View>
             </>
           )}
 
@@ -513,6 +534,7 @@ const ProductDetail = () => {
           )}
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
       {variants.length > 0 && (
         <View style={styles.actionContainer}>
           <TouchableOpacity style={styles.addToCartButton} onPress={handleAddToCart}>
@@ -535,6 +557,7 @@ const ProductDetail = () => {
         showConfirmButton={modalConfig.showConfirmButton}
       />
     </View>
+    
   );
 };
 
@@ -584,6 +607,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginHorizontal: 10,
     fontSize: 16,
+    
   },
   stockText: { fontSize: 14, color: '#666', marginLeft: 10 },
   actionContainer: {
