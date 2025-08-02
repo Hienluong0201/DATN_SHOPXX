@@ -1,22 +1,109 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, TextInput, StyleSheet, FlatList, Text, Image, TouchableOpacity, Alert } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
-import { useProducts } from '../store/useProducts'; // Điều chỉnh đường dẫn nếu cần
-import { useAuth } from '../store/useAuth'; // Điều chỉnh đường dẫn nếu cần
+import { useProducts } from '../store/useProducts';
+import { useAuth } from '../store/useAuth';
 import { router } from 'expo-router';
-import AxiosInstance from '../axiosInstance/AxiosInstance'; // Import AxiosInstance
+import AxiosInstance from '../axiosInstance/AxiosInstance';
+import { LinearGradient } from 'expo-linear-gradient';
+import ShimmerPlaceHolder from 'react-native-shimmer-placeholder';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Modal, ActivityIndicator } from 'react-native';
+const SEARCH_HISTORY_KEY = 'search_history_v1';
+const OPENROUTER_KEY = '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';
+
+// ========== AI OUTIFT SUGGEST FUNCTION ==========
+async function askAIForOutfitSuggestions(productName, productDesc = '') {
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + OPENROUTER_KEY,
+        'HTTP-Referer': 'your-app-name',
+      },
+      body: JSON.stringify({
+        model: 'openrouter/horizon-beta',
+        messages: [
+          {
+            role: 'system',
+            content: 'Bạn là stylist chuyên nghiệp, hãy trả lời thật ngắn gọn, dễ hiểu, phân tách từng món rõ ràng.'
+          },
+          {
+            role: 'user',
+            content: `Gợi ý cho tôi 3-5 set đồ có thể phối đẹp với sản phẩm: ${productName}. 
+            Mô tả sản phẩm: ${productDesc}. 
+            Chỉ trả về dạng list: mỗi set gồm các món cơ bản, có thể lấy trong shop như: quần, áo, giày, túi, phụ kiện (đừng ghi brand/cửa hàng).`
+          }
+        ],
+        max_tokens: 400,
+        temperature: 0.7,
+      }),
+    });
+    const data = await res.json();
+    if (data?.choices?.[0]?.message?.content) {
+      return data.choices[0].message.content.trim();
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+// ================================================
 
 export default function SearchScreen() {
   const { addToWishlist, removeFromWishlist, isInWishlist, getWishlistId } = useProducts();
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
   const [hasMore, setHasMore] = useState(true);
+  const [searchHistory, setSearchHistory] = useState([]);
+  const [outfitSuggest, setOutfitSuggest] = useState({});
+  const [suggesting, setSuggesting] = useState('');
+  const debounceTimer = useRef(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [currentSuggestText, setCurrentSuggestText] = useState('');
+  const [modalLoading, setModalLoading] = useState(false);
+  // --- Search History functions ---
+  const saveSearchHistory = async (keyword) => {
+    if (!keyword?.trim()) return;
+    try {
+      let history = [];
+      const data = await AsyncStorage.getItem(SEARCH_HISTORY_KEY);
+      if (data) history = JSON.parse(data);
+      history = [keyword, ...history.filter(k => k !== keyword)];
+      if (history.length > 10) history = history.slice(0, 10);
+      await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history));
+      setSearchHistory(history);
+    } catch {}
+  };
+  const getSearchHistory = async () => {
+    try {
+      const data = await AsyncStorage.getItem(SEARCH_HISTORY_KEY);
+      setSearchHistory(data ? JSON.parse(data) : []);
+    } catch {
+      setSearchHistory([]);
+    }
+  };
+  const clearSearchHistory = async () => {
+    await AsyncStorage.removeItem(SEARCH_HISTORY_KEY);
+    setSearchHistory([]);
+  };
+  const removeHistoryItem = async (keyword) => {
+    let history = searchHistory.filter(k => k !== keyword);
+    await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history));
+    setSearchHistory(history);
+  };
 
-  const fetchProducts = async (query: string, pageNum: number, reset: boolean = false) => {
+  useEffect(() => {
+    getSearchHistory();
+  }, []);
+
+  // --- Search functions ---
+  const fetchProducts = async (query, pageNum, reset = false) => {
     setLoading(true);
     setError(null);
     try {
@@ -24,31 +111,20 @@ export default function SearchScreen() {
       if (query) {
         queryString += `&name=${encodeURIComponent(query)}`;
       }
-      console.log('API Query:', queryString); // Log URL API được gọi
-
       const productResponse = await AxiosInstance().get(queryString);
-      console.log('API Response:', productResponse); // Log toàn bộ phản hồi API
-
       const fetchedProducts = await Promise.all(
-        (productResponse.products || []).map(async (product: any) => {
+        (productResponse.products || []).map(async (product) => {
           if (!product._id) return null;
           let imageURLs = ['https://via.placeholder.com/150'];
           let rating = 5;
           try {
             const imageResponse = await AxiosInstance().get(`/img?productID=${product._id}`);
-            console.log(`Image Response for ${product._id}:`, imageResponse); // Log phản hồi hình ảnh
             imageURLs = imageResponse[0]?.imageURL || imageURLs;
-          } catch (imgErr) {
-            console.log(`Image Error for ${product._id}:`, imgErr); // Log lỗi hình ảnh
-          }
+          } catch {}
           try {
             const ratingResponse = await AxiosInstance().get(`/review/product/${product._id}/average-rating`);
-            console.log(`Rating Response for ${product._id}:`, ratingResponse); // Log phản hồi rating
             rating = ratingResponse.averageRating || 0;
-          } catch (rateErr) {
-            console.log(`Rating Error for ${product._id}:`, rateErr); // Log lỗi rating
-          }
-
+          } catch {}
           return {
             ProductID: product._id,
             CategoryID: product.categoryID || '',
@@ -60,13 +136,12 @@ export default function SearchScreen() {
           };
         })
       );
-
-      const validProducts = fetchedProducts.filter(p => p !== null);
-      console.log('Valid Products:', validProducts); // Log danh sách sản phẩm sau xử lý
+      const validProducts = fetchedProducts.filter(
+        p => p !== null && (typeof p.Status === 'undefined' || p.Status === true)
+      );
       setProducts(prev => reset ? validProducts : [...prev, ...validProducts]);
       setHasMore(validProducts.length >= 10);
     } catch (err) {
-      console.log('Fetch Products Error:', err); // Log lỗi API
       setError('Không thể tải sản phẩm. Vui lòng thử lại.');
       Alert.alert('Lỗi', 'Không thể tải sản phẩm.');
     } finally {
@@ -74,27 +149,39 @@ export default function SearchScreen() {
     }
   };
 
-  const handleSearch = (query: string) => {
-    console.log('Search Query:', query); // Log từ khóa tìm kiếm
+  const handleSearch = (query) => {
     setSearchQuery(query);
     setPage(1);
+
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
     if (query.length > 0) {
-      fetchProducts(query, 1, true);
-    } else if (query.length === 0) {
+      debounceTimer.current = setTimeout(() => {
+        fetchProducts(query, 1, true);
+        saveSearchHistory(query);
+      }, 1000); // debounce nhanh hơn
+    } else {
       setProducts([]);
     }
+  };
+
+  const handleHistoryPress = (query) => {
+    setSearchQuery(query);
+    fetchProducts(query, 1, true);
+    saveSearchHistory(query);
   };
 
   const loadMoreProducts = () => {
     if (!loading && hasMore) {
       const nextPage = page + 1;
-      console.log('Loading More, Page:', nextPage); // Log trang tải thêm
       setPage(nextPage);
       fetchProducts(searchQuery, nextPage);
     }
   };
 
-  const handleToggleWishlist = (product: any) => {
+  // --- Wishlist & Detail ---
+  const handleToggleWishlist = (product) => {
     if (!user?._id) {
       Alert.alert('Lỗi', 'Vui lòng đăng nhập để thêm vào danh sách yêu thích.');
       return;
@@ -106,24 +193,35 @@ export default function SearchScreen() {
       addToWishlist(product, user._id);
     }
   };
-
-  const navigateToProductDetail = (productId: string) =>
+  const navigateToProductDetail = (productId) =>
     router.push({ pathname: './productDetail', params: { productId } });
 
+  // --- Skeleton ---
   const renderSkeletonItem = () => (
     <View style={styles.productCard}>
-      <View style={[styles.productImage, styles.skeletonImage]} />
+      <ShimmerPlaceHolder
+        LinearGradient={LinearGradient}
+        style={[styles.productImage, styles.skeletonImage]}
+      />
       <View style={styles.productInfo}>
-        <View style={[styles.skeletonText, { width: '80%', height: 14, marginBottom: 5 }]} />
-        <View style={[styles.skeletonText, { width: '60%', height: 14 }]} />
+        <ShimmerPlaceHolder
+          LinearGradient={LinearGradient}
+          style={[styles.skeletonText, { width: '80%', height: 14, marginBottom: 5 }]}
+        />
+        <ShimmerPlaceHolder
+          LinearGradient={LinearGradient}
+          style={[styles.skeletonText, { width: '60%', height: 14 }]}
+        />
       </View>
     </View>
   );
 
-  const renderProduct = ({ item }: any) => (
+  // --- Product Render (with AI outfit suggest) ---
+  const renderProduct = ({ item }) => (
     <TouchableOpacity
       style={styles.productCard}
       onPress={() => navigateToProductDetail(item.ProductID)}
+      activeOpacity={0.87}
     >
       <View style={styles.imageContainer}>
         <Image
@@ -147,10 +245,35 @@ export default function SearchScreen() {
           {item.Name}
         </Text>
         <Text style={styles.productPrice}>{item.Price}đ</Text>
+
+       <TouchableOpacity
+  style={{
+    marginTop: 10,
+    backgroundColor: '#ffe7b0',
+    borderRadius: 8,
+    padding: 8,
+    alignSelf: 'center',
+    minWidth: 120,
+  }}
+  onPress={async () => {
+    setModalVisible(true);
+    setModalLoading(true);
+    setCurrentSuggestText(''); // Xoá gợi ý cũ khi mở modal mới
+    const aiResult = await askAIForOutfitSuggestions(item.Name, item.Description);
+    setCurrentSuggestText(aiResult || 'Không lấy được gợi ý từ AI.');
+    setModalLoading(false);
+  }}
+>
+  <Text style={{ color: '#8B4513', fontWeight: 'bold', textAlign: 'center' }}>
+    Gợi ý phối đồ
+  </Text>
+</TouchableOpacity>
+
       </View>
     </TouchableOpacity>
   );
 
+  // --- UI ---
   return (
     <View style={styles.container}>
       <View style={styles.searchContainer}>
@@ -164,14 +287,39 @@ export default function SearchScreen() {
         />
         <MaterialIcons name="search" size={24} color="#8B4513" style={styles.searchIcon} />
       </View>
-      {error ? (
-        <Text style={styles.errorText}>{error}</Text>
-      ) : loading && page === 1 ? (
-        <View style={styles.gridContainer}>
-          {[...Array(4)].map((_, index) => (
-            <View key={`skeleton-${index}`}>{renderSkeletonItem()}</View>
+
+      {/* Hiện lịch sử tìm kiếm khi chưa có query */}
+      {searchQuery.length === 0 && searchHistory.length > 0 && (
+        <View style={{ marginHorizontal: 15, marginBottom: 8 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Text style={{ color: '#888', fontWeight: '600' }}>Lịch sử tìm kiếm</Text>
+            <TouchableOpacity onPress={clearSearchHistory}>
+              <Text style={{ color: '#FF6F00', fontWeight: '600' }}>Xóa hết</Text>
+            </TouchableOpacity>
+          </View>
+          {searchHistory.map((item, i) => (
+            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+              <TouchableOpacity style={{ flex: 1 }} onPress={() => handleHistoryPress(item)}>
+                <Text style={{ color: '#333', fontSize: 15, paddingVertical: 4 }}>{item}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => removeHistoryItem(item)} style={{ padding: 8 }}>
+                <Ionicons name="close-circle" size={18} color="#aaa" />
+              </TouchableOpacity>
+            </View>
           ))}
         </View>
+      )}
+
+      {loading && page === 1 ? (
+        <FlatList
+          data={Array.from({ length: 8 })}
+          renderItem={renderSkeletonItem}
+          keyExtractor={(_, i) => `skeleton-${i}`}
+          numColumns={2}
+          contentContainerStyle={styles.listContent}
+        />
+      ) : error ? (
+        <Text style={styles.errorText}>{error}</Text>
       ) : products.length === 0 && searchQuery ? (
         <Text style={styles.noResultsText}>Không tìm thấy sản phẩm nào.</Text>
       ) : (
@@ -181,15 +329,79 @@ export default function SearchScreen() {
           keyExtractor={(item) => item.ProductID}
           contentContainerStyle={styles.listContent}
           numColumns={2}
+          onEndReached={loadMoreProducts}
+          onEndReachedThreshold={0.25}
           ListFooterComponent={
-            hasMore && !loading ? (
-              <TouchableOpacity style={styles.loadMoreButton} onPress={loadMoreProducts}>
-                <Text style={styles.loadMoreText}>Tải thêm</Text>
-              </TouchableOpacity>
+            loading && page > 1 ? (
+              <FlatList
+                data={Array.from({ length: 4 })}
+                renderItem={renderSkeletonItem}
+                keyExtractor={(_, i) => `skeleton-more-${i}`}
+                numColumns={2}
+                contentContainerStyle={styles.listContent}
+                scrollEnabled={false}
+              />
             ) : null
           }
         />
       )}
+      <Modal
+  visible={modalVisible}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setModalVisible(false)}
+>
+  <View style={{
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  }}>
+    <View style={{
+      width: '86%',
+      backgroundColor: '#fff',
+      borderRadius: 16,
+      padding: 18,
+      alignItems: 'center',
+      shadowColor: '#222', shadowOpacity: 0.18, shadowRadius: 10, elevation: 4,
+    }}>
+      <Text style={{
+        fontWeight: 'bold',
+        fontSize: 17,
+        color: '#8B4513',
+        marginBottom: 8,
+        textAlign: 'center'
+      }}>Gợi ý phối đồ</Text>
+      {modalLoading ? (
+        <ActivityIndicator size={32} color="#d4af37" style={{ marginVertical: 18 }} />
+      ) : (
+        <Text style={{
+          color: '#333',
+          fontSize: 15,
+          lineHeight: 22,
+          textAlign: 'left',
+          marginTop: 8,
+        }}>
+          {currentSuggestText}
+        </Text>
+      )}
+      <TouchableOpacity
+        onPress={() => setModalVisible(false)}
+        style={{
+          marginTop: 20,
+          backgroundColor: '#d4af37',
+          borderRadius: 12,
+          paddingVertical: 8,
+          paddingHorizontal: 36,
+        }}
+      >
+        <Text style={{
+          color: '#fff', fontWeight: 'bold', fontSize: 15, textAlign: 'center'
+        }}>Đóng</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
     </View>
   );
 }

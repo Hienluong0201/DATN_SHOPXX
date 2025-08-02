@@ -29,7 +29,7 @@ import BannerComponent from '../components/BannerComponent';
 import CategoriesComponent from '../components/CategoriesComponent';
 import QuickAccessComponent from '../components/QuickAccessComponent';
 import ProductsComponent from '../components/ProductsComponent';
-
+import AIChatBubble from '../components/AIChatBubble';
 export default function HomeScreen() {
   const { user, loadUser, setUser } = useAuth();
   const { categories, products, fetchProducts, loading, error, fetchCategories, fetchWishlist, wishlist, addToWishlist, removeFromWishlist, isInWishlist, getWishlistId, fetchProductVariants } = useProducts();
@@ -331,6 +331,8 @@ export default function HomeScreen() {
         variants={currentVariants}
         product={currentProduct}
       />
+        <AIChatBubble />
+
     </View>
   );
 }

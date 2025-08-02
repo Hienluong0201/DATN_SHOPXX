@@ -234,14 +234,7 @@ useEffect(() => {
                   />
                 </TouchableOpacity>
                 <Text style={styles.actionText}>{formatNumber(item.likes.length)}</Text>
-
-                <TouchableOpacity style={styles.actionButton}>
-                  <Ionicons name="chatbubble-outline" size={28} color="#fff" />
-                </TouchableOpacity>
-                <Text style={styles.actionText}>0</Text>
-
-             
-              </View>
+               </View>
 
               {/* Bottom info */}
               <View style={styles.bottomInfo}>

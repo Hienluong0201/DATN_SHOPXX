@@ -1,11 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  FlatList, Image, ActivityIndicator, RefreshControl, ScrollView
+  FlatList, Image, ActivityIndicator, RefreshControl, ScrollView, Dimensions
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useProducts } from '../store/useProducts';
+import ShimmerPlaceHolder from 'react-native-shimmer-placeholder';
+import { LinearGradient } from 'expo-linear-gradient';
+import { TextInput } from 'react-native';
+const CARD_WIDTH = (Dimensions.get('window').width - 35) / 2;
 
 const ProductCard = ({ product, onPress }) => (
   <TouchableOpacity style={styles.productCard} onPress={onPress}>
@@ -20,6 +24,27 @@ const ProductCard = ({ product, onPress }) => (
     </View>
     <Text style={styles.productPrice}>{(product.Price || 0).toLocaleString()}đ</Text>
   </TouchableOpacity>
+);
+
+const ProductSkeleton = () => (
+  <View style={styles.productCard}>
+    <ShimmerPlaceHolder
+      LinearGradient={LinearGradient}
+      style={styles.skeletonImage}
+    />
+    <ShimmerPlaceHolder
+      LinearGradient={LinearGradient}
+      style={styles.skeletonLine}
+    />
+    <ShimmerPlaceHolder
+      LinearGradient={LinearGradient}
+      style={[styles.skeletonLine, { width: 60 }]}
+    />
+    <ShimmerPlaceHolder
+      LinearGradient={LinearGradient}
+      style={[styles.skeletonLine, { width: 50 }]}
+    />
+  </View>
 );
 
 const Products = () => {
@@ -39,6 +64,13 @@ const Products = () => {
   const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const flatListRef = useRef(null);
+
+  // Tab scroll ref và lưu offset từng tab
+  const tabScrollRef = useRef(null);
+  const tabLayouts = useRef([]); // [{x, width}]
 
   // Danh sách tất cả category cho thanh tab ngang
   const categoryList = useMemo(
@@ -56,11 +88,18 @@ const Products = () => {
   // Lấy đúng danh mục theo index
   const selectedCategory = categoryList[selectedCategoryIndex] || categoryList[0];
 
-  // Danh sách sản phẩm theo danh mục (filter client hoặc lấy hết từ server)
-  const filteredProducts =
-    selectedCategory.CategoryID === 'all'
-      ? products
-      : getProductsByCategory(selectedCategory.CategoryID);
+  // Danh sách sản phẩm theo danh mục
+  const filteredProducts = useMemo(() => {
+  const list = selectedCategory.CategoryID === 'all'
+    ? products
+    : getProductsByCategory(selectedCategory.CategoryID);
+  const lowerSearch = searchQuery.trim().toLowerCase();
+  if (!lowerSearch) return list;
+  return list.filter(
+    prod => prod?.Name?.toLowerCase().includes(lowerSearch)
+    // Bạn muốn mở rộng tìm thêm field nào nữa thì thêm OR ở đây
+  );
+}, [selectedCategory, products, getProductsByCategory, searchQuery]);
 
   // Fetch categories 1 lần khi vào trang
   useEffect(() => {
@@ -72,6 +111,22 @@ const Products = () => {
     fetchProducts({ categoryId: categoryId || 'all', page: 1, limit });
     setPage(2);
     setHasMore(true);
+    // Scroll lên đầu khi đổi tab
+    if (flatListRef.current) {
+      flatListRef.current.scrollToOffset({ animated: true, offset: 0 });
+    }
+    // Scroll tab ra giữa khi đổi tab (kể cả khi đổi qua router ngoài)
+    setTimeout(() => {
+      if (
+        tabScrollRef.current &&
+        tabLayouts.current[selectedCategoryIndex]
+      ) {
+        const { x, width } = tabLayouts.current[selectedCategoryIndex];
+        const screenWidth = Dimensions.get('window').width;
+        const targetScrollX = Math.max(0, x + width / 2 - screenWidth / 2);
+        tabScrollRef.current.scrollTo({ x: targetScrollX, animated: true });
+      }
+    }, 180);
   }, [categoryId]);
 
   // Kéo xuống để refresh
@@ -109,12 +164,18 @@ const Products = () => {
     router.push({ pathname: './productDetail', params: { productId } });
   };
 
-  // Nếu đang loading lần đầu (page 1)
+  // Nếu đang loading lần đầu (page 1) -> skeleton loading
   if (loading && !refreshing && page === 1) {
     return (
-      <View style={styles.fullScreenLoadingContainer}>
-        <ActivityIndicator size={50} color="#d4af37" />
-        <Text style={styles.loadingText}>Đang tải...</Text>
+      <View style={styles.container}>
+        <FlatList
+          data={Array.from({ length: 8 })}
+          renderItem={ProductSkeleton}
+          keyExtractor={(_, i) => `skeleton-${i}`}
+          numColumns={2}
+          columnWrapperStyle={styles.productRow}
+          contentContainerStyle={styles.productList}
+        />
       </View>
     );
   }
@@ -128,110 +189,111 @@ const Products = () => {
     );
   }
 
- return (
-  <View style={styles.container}>
-    {/* FlatList với header sticky */}
-    <FlatList
-      data={filteredProducts}
-      renderItem={({ item }) => (
-        <ProductCard
-          product={item}
-          onPress={() => navigateToProductDetail(item.ProductID)}
-        />
-      )}
-      keyExtractor={(item, index) => item.ProductID || `fallback-${index}`}
-      numColumns={2}
-      columnWrapperStyle={styles.productRow}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.productList}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={['#d4af37']}
-          tintColor="#d4af37"
-        />
-      }
-      onEndReached={loadMoreProducts}
-      onEndReachedThreshold={0.5}
-      ListFooterComponent={
-        isLoadingMore ? (
-          <ActivityIndicator size="small" color="#d4af37" style={styles.loadingMore} />
-        ) : null
-      }
-      ListEmptyComponent={
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>Không có sản phẩm trong danh mục này</Text>
-        </View>
-      }
-      ListHeaderComponent={
-        <View>
-          {/* Header với nút back */}
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-              <MaterialIcons name="arrow-back" size={24} color="#000" />
-            </TouchableOpacity>
-            <Text style={styles.title}>Danh Mục</Text>
+  return (
+    <View style={styles.container}>
+      <FlatList
+        ref={flatListRef}
+        data={filteredProducts}
+        renderItem={({ item }) => (
+          <ProductCard
+            product={item}
+            onPress={() => navigateToProductDetail(item.ProductID)}
+          />
+        )}
+        keyExtractor={(item, index) => item.ProductID || `fallback-${index}`}
+        numColumns={2}
+        columnWrapperStyle={styles.productRow}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.productList}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#d4af37']}
+            tintColor="#d4af37"
+          />
+        }
+        onEndReached={loadMoreProducts}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          isLoadingMore ? (
+            <ActivityIndicator size="small" color="#d4af37" style={styles.loadingMore} />
+          ) : null
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>Không có sản phẩm trong danh mục này</Text>
           </View>
-
-          {/* Thanh tab danh mục */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.categoryContainer}
-            contentContainerStyle={styles.categoryContent}
-          >
-            {categoryList.map((cat, index) => (
-              <TouchableOpacity
-                key={cat.CategoryID}
-                style={[
-                  styles.categoryTab,
-                  index === selectedCategoryIndex && styles.selectedCategoryTab,
-                ]}
-                onPress={() => {
-                  router.setParams({ categoryId: cat.CategoryID });
-                }}
-              >
-                <Text style={styles.categoryName}>{cat.Name || 'Không tên'}</Text>
+        }
+        ListHeaderComponent={
+          <View>
+            {/* Header với nút back */}
+            <View style={styles.header}>
+              <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                <MaterialIcons name="arrow-back" size={24} color="#000" />
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      }
-      stickyHeaderIndices={[0]} // Sticky header (header là phần đầu tiên)
-    />
-  </View>
-);
+              <Text style={styles.title}>Danh Mục</Text>
+            </View>
+            <View style={styles.searchBoxContainer}>
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder={`Tìm kiếm sản phẩm${selectedCategory.Name !== 'Tất cả' ? ` trong "${selectedCategory.Name}"` : ''}`}
+                style={styles.searchBox}
+                returnKeyType="search"
+                clearButtonMode="while-editing"
+              />
+            </View>
+            {/* Thanh tab danh mục */}
+            <ScrollView
+              ref={tabScrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.categoryContainer}
+              contentContainerStyle={styles.categoryContent}
+            >
+              {categoryList.map((cat, index) => (
+                <TouchableOpacity
+                  key={cat.CategoryID}
+                  style={[
+                    styles.categoryTab,
+                    index === selectedCategoryIndex && styles.selectedCategoryTab,
+                  ]}
+                  onLayout={event => {
+                    const { x, width } = event.nativeEvent.layout;
+                    tabLayouts.current[index] = { x, width };
+                  }}
+                  onPress={() => {
+                    router.setParams({ categoryId: cat.CategoryID });
 
-
+                    // Scroll tab ra giữa màn hình khi bấm
+                    setTimeout(() => {
+                      if (
+                        tabScrollRef.current &&
+                        tabLayouts.current[index]
+                      ) {
+                        const { x, width } = tabLayouts.current[index];
+                        const screenWidth = Dimensions.get('window').width;
+                        const targetScrollX = Math.max(0, x + width / 2 - screenWidth / 2);
+                        tabScrollRef.current.scrollTo({ x: targetScrollX, animated: true });
+                      }
+                    }, 100);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.categoryName}>{cat.Name || 'Không tên'}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        }
+        stickyHeaderIndices={[0]}
+      />
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-  categoryContainer: {
-  marginTop: 0,
-  marginBottom: 4,
-  backgroundColor: '#fff', // màu nền cố định
-  borderBottomWidth: 1,
-  borderColor: '#f0f0f0',
-  paddingVertical: 4,
-  zIndex: 2,
-},
-categoryContent: {
-  paddingHorizontal: 10,
-  alignItems: 'center',
-},
-  fullScreenLoadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 18,
-    color: '#2c2c2c',
-    fontWeight: '500',
-  },
   container: {
     flex: 1,
     backgroundColor: '#fff',
@@ -306,25 +368,32 @@ categoryContent: {
     marginBottom: 10,
   },
   productCard: {
-    flex: 1,
+    width: CARD_WIDTH,
     margin: 5,
     backgroundColor: '#fff',
     borderRadius: 10,
     padding: 10,
     alignItems: 'center',
     elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
   productImage: {
     width: 120,
     height: 120,
     resizeMode: 'contain',
     marginBottom: 10,
+    borderRadius: 10,
+    backgroundColor: '#f5f5f5',
   },
   productName: {
     fontSize: 14,
     fontWeight: '500',
     color: '#000',
     textAlign: 'center',
+    marginTop: 4,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -340,10 +409,41 @@ categoryContent: {
     fontSize: 14,
     fontWeight: 'bold',
     color: '#c0392b',
+    marginTop: 4,
   },
   loadingMore: {
     marginVertical: 20,
   },
+  skeletonImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 10,
+    marginBottom: 10,
+    backgroundColor: '#e0e0e0',
+  },
+  skeletonLine: {
+    width: 90,
+    height: 14,
+    borderRadius: 4,
+    marginBottom: 7,
+    backgroundColor: '#e0e0e0',
+    alignSelf: 'center',
+  },
+  searchBoxContainer: {
+  paddingHorizontal: 10,
+  marginTop: 10,
+  marginBottom: 0,
+},
+searchBox: {
+  backgroundColor: '#f5f5f5',
+  borderRadius: 20,
+  paddingHorizontal: 16,
+  paddingVertical: 8,
+  fontSize: 15,
+  borderWidth: 1,
+  borderColor: '#ececec',
+},
+
 });
 
 export default Products;

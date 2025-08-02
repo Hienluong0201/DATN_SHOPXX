@@ -10,7 +10,6 @@ import AxiosInstance from '../axiosInstance/AxiosInstance';
 import { useProducts } from '../store/useProducts';
 import { useAuth } from '../store/useAuth';
 import * as ImagePicker from 'expo-image-picker';
-import * as mime from 'react-native-mime-types'; 
 import Modal from 'react-native-modal';
 import { Ionicons as CustomModalIonicons } from '@expo/vector-icons';
 import { Linking } from 'react-native';
@@ -58,7 +57,7 @@ const formatDate = (dateString) =>
 const formatVoucher = (voucher) => {
   if (!voucher) return '';
   if (voucher.discountType === 'percent') {
-    return `Giảm ${voucher.discountValue}% (Tối đa ${voucher.usageLimit} lần)`;
+    return `Giảm ${voucher.discountValue}`;
   }
   if (voucher.discountType === 'fixed') {
     return `Giảm ${formatPrice(voucher.discountValue)}`;
