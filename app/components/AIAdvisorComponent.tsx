@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-const OPENROUTER_KEY = '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';
+const OPENROUTER_KEY = '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';
 
 export default function AIAdvisorComponent() {
   const [aiInput, setAiInput] = useState('');

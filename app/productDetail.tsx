@@ -216,15 +216,7 @@ const loadData = useCallback(async () => {
   }
 
   setIsDataLoaded(true);
-}, [id, fetchProductVariants, isDataLoaded]);
-
-  // Reload lại data sau khi gửi review thành công
-  const reloadReview = async () => {
-    try {
-      const reviewData = await AxiosInstance().get(`/review/product/${productId}`);
-      setReviews(reviewData || []);
-    } catch {}
-  };
+}, [id, isDataLoaded]);
 
   useFocusEffect(
     useCallback(() => {
