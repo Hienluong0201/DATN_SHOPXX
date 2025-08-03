@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet, Keyboard
+  View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet, Keyboard,ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-const OPENROUTER_KEY = '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';
+const GEMINI_API_KEY = 'AIzaSyAfH5zVG1isAAYD8WCBcuoz0w3_j5VXwf8';
+const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
 
 export default function AIAdvisorComponent() {
   const [aiInput, setAiInput] = useState('');
@@ -18,43 +19,42 @@ export default function AIAdvisorComponent() {
     Keyboard.dismiss();
 
     try {
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const res = await fetch(GEMINI_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + OPENROUTER_KEY,
-          'HTTP-Referer': 'myshop-clothes-app',
         },
         body: JSON.stringify({
-         model: 'openrouter/horizon-beta',
-          messages: [
-            { role: 'system', content: 'Bạn là trợ lý AI cho shop quần áo, chuyên tư vấn phối đồ, chọn size, mẹo mặc đẹp, trend thời trang...' },
-            { role: 'user', content: aiInput }
-          ],
-          max_tokens: 350,
-          temperature: 0.7,
+          contents: [
+            {
+              parts: [
+                { text: `Bạn là trợ lý AI cho shop quần áo, chuyên tư vấn phối đồ, chọn size, mẹo mặc đẹp, trend thời trang...
+Câu hỏi của user: ${aiInput}` }
+              ]
+            }
+          ]
         }),
       });
 
       const data = await res.json();
-      console.log('OpenRouter data:', data);
-
-      if (data?.choices?.[0]?.message?.content) {
-        setAiResponse(data.choices[0].message.content.trim());
+      // Xử lý trả lời
+      const answer = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (answer) {
+        setAiResponse(answer.trim());
       } else if (data?.error?.message) {
         setAiResponse('Lỗi API: ' + data.error.message);
       } else {
-        setAiResponse('Không thể nhận phản hồi từ AI.');
+        setAiResponse('Không thể nhận phản hồi từ Gemini AI.');
       }
     } catch (err) {
-      setAiResponse('Lỗi mạng hoặc không thể kết nối OpenRouter.');
+      setAiResponse('Lỗi mạng hoặc không thể kết nối Gemini.');
     }
     setAiLoading(false);
   };
 
   return (
     <View style={styles.wrapper}>
-      <Text style={styles.title}>Hỏi AI thời trang 👗🧑‍💼</Text>
+      <Text style={styles.title}>Hỏi AI thời trang 👗🧑‍💼 (Gemini)</Text>
       <View style={styles.row}>
         <TextInput
           style={styles.input}
@@ -73,10 +73,12 @@ export default function AIAdvisorComponent() {
         </TouchableOpacity>
       </View>
       {!!aiResponse && (
-        <View style={styles.responseBox}>
-          <Text style={styles.responseText}>{aiResponse}</Text>
-        </View>
-      )}
+  <View style={[styles.responseBox, { maxHeight: 350 }]}>
+    <ScrollView  showsVerticalScrollIndicator={false}>
+      <Text style={styles.responseText}>{aiResponse}</Text>
+    </ScrollView>
+  </View>
+)}
     </View>
   );
 }

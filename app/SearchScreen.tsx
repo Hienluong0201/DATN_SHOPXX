@@ -9,42 +9,37 @@ import { LinearGradient } from 'expo-linear-gradient';
 import ShimmerPlaceHolder from 'react-native-shimmer-placeholder';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Modal, ActivityIndicator } from 'react-native';
-const SEARCH_HISTORY_KEY = 'search_history_v1';
-const OPENROUTER_KEY = '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';
+const GEMINI_API_KEY = 'AIzaSyAfH5zVG1isAAYD8WCBcuoz0w3_j5VXwf8';
+const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
 
-// ========== AI OUTIFT SUGGEST FUNCTION ==========
+// ========== AI OUTFIT SUGGEST FUNCTION (Gemini API) ==========
 async function askAIForOutfitSuggestions(productName, productDesc = '') {
   try {
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const res = await fetch(GEMINI_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + OPENROUTER_KEY,
-        'HTTP-Referer': 'your-app-name',
       },
       body: JSON.stringify({
-        model: 'openrouter/horizon-beta',
-        messages: [
+        contents: [
           {
-            role: 'system',
-            content: 'Bạn là stylist chuyên nghiệp, hãy trả lời thật ngắn gọn, dễ hiểu, phân tách từng món rõ ràng.'
-          },
-          {
-            role: 'user',
-            content: `Gợi ý cho tôi 3-5 set đồ có thể phối đẹp với sản phẩm: ${productName}. 
-            Mô tả sản phẩm: ${productDesc}. 
-            Chỉ trả về dạng list: mỗi set gồm các món cơ bản, có thể lấy trong shop như: quần, áo, giày, túi, phụ kiện (đừng ghi brand/cửa hàng).`
+            parts: [
+              {
+                text: `
+Bạn là stylist chuyên nghiệp, hãy trả lời thật ngắn gọn, dễ hiểu, phân tách từng món rõ ràng.
+Gợi ý cho tôi 3-5 set đồ có thể phối đẹp với sản phẩm: ${productName}.
+Mô tả sản phẩm: ${productDesc}.
+Chỉ trả về dạng list: mỗi set gồm các món cơ bản, có thể lấy trong shop như: quần, áo, giày, túi, phụ kiện (đừng ghi brand/cửa hàng).
+                `.trim()
+              }
+            ]
           }
-        ],
-        max_tokens: 400,
-        temperature: 0.7,
+        ]
       }),
     });
     const data = await res.json();
-    if (data?.choices?.[0]?.message?.content) {
-      return data.choices[0].message.content.trim();
-    }
-    return null;
+    const result = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    return result?.trim() || null;
   } catch (e) {
     return null;
   }
