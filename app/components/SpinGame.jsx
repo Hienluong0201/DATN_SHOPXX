@@ -8,13 +8,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const WHEEL_COLORS = ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff', '#ff9f40', '#ff7979'];
 const LABELS = [
-  'Không trúng', 
-  'May mắn lần sau', 
-  'Ô mất lượt', 
-  'Quay lại', 
-  'Trúng Voucher', 
-  'Rồi xong', 
-  'Ngày mai quay'
+  '0%', 
+  '0%', 
+  '0%', 
+  '10%', 
+  '20%', 
+  '30%', 
+  '40%',
 ];
 
 export default function SpinGame({ onClose, onResult }) {

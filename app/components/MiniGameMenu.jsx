@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function MiniGameMenu({ onSpin, onFlip, onEgg }) {
   return (
@@ -12,14 +12,7 @@ export default function MiniGameMenu({ onSpin, onFlip, onEgg }) {
         <Ionicons name="sync-circle" size={21} color="#fff" style={{ marginRight: 7 }} />
         <Text style={styles.text}>Vòng quay may mắn</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.btn} onPress={onFlip}>
-        <MaterialCommunityIcons name="cards-playing" size={21} color="#fff" style={{ marginRight: 7 }} />
-        <Text style={styles.text}>Lật thẻ bí ẩn</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.btn} onPress={onEgg}>
-        <MaterialCommunityIcons name="egg-easter" size={21} color="#fff" style={{ marginRight: 7 }} />
-        <Text style={styles.text}>Đập trứng</Text>
-      </TouchableOpacity>
+   
     </View>
   );
 }

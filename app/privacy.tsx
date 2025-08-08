@@ -28,7 +28,7 @@ const VoucherScreen = () => {
   const [spinning, setSpinning] = useState(false);
   const { user } = useAuth();
   const userId = user?._id;
-
+  const [vouchers, setVouchers] = useState([]);
   // Lấy shop voucher public
   const fetchPublicVouchers = useCallback(async () => {
     try {
@@ -38,7 +38,14 @@ const VoucherScreen = () => {
       setPublicVouchers([]);
     }
   }, []);
-
+  const fetchVouchers = useCallback(async () => {
+    try {
+      const res = await AxiosInstance().get('/voucher');
+      setVouchers(res.data || []);
+    } catch {
+      setVouchers([]);
+    }
+  }, []);
   // Lấy ví voucher của tôi
   const fetchMyVouchers = useCallback(async () => {
     try {
@@ -50,13 +57,12 @@ const VoucherScreen = () => {
   }, [userId]);
 
   // Làm mới tất cả
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    await Promise.all([fetchPublicVouchers(), fetchMyVouchers()]);
-    setLoading(false);
-    setRefreshing(false);
-  }, [fetchPublicVouchers, fetchMyVouchers]);
-
+ const fetchAll = useCallback(async () => {
+  setLoading(true);
+  await Promise.all([fetchPublicVouchers(), fetchMyVouchers(), fetchVouchers()]);
+  setLoading(false);
+  setRefreshing(false);
+}, [fetchPublicVouchers, fetchMyVouchers, fetchVouchers]);
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
@@ -227,6 +233,21 @@ const VoucherScreen = () => {
             }
             scrollEnabled={false}
           />
+          {/* ALL VOUCHER API */}
+        <Text style={styles.sectionTitle}>🔥 Tất cả voucher</Text>
+        <FlatList
+          data={vouchers}
+          renderItem={renderVoucher}
+          keyExtractor={item => item._id}
+          contentContainerStyle={{ paddingBottom: 10 }}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="gift-outline" size={62} color="#bdbdbd" />
+              <Text style={{ color: "#888", marginTop: 8, fontSize: 15 }}>Không có voucher nào</Text>
+            </View>
+          }
+          scrollEnabled={false}
+        />
         </ScrollView>
       )}
     </View>
@@ -314,7 +335,8 @@ const styles = StyleSheet.create({
   },
   claimBtn: {
     marginTop: 12,
-    backgroundColor: "#059669",
+    marginLeft : 15,
+    backgroundColor: "#8B4513",
     paddingVertical: 9,
     borderRadius: 10,
     alignItems: 'center',

@@ -14,16 +14,26 @@ import {
 } from 'react-native';
 import { router } from 'expo-router'; // Thêm import router
 import { useAuth } from '../store/useAuth';
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ActivityIndicator } from 'react-native';
 const ProfileScreen = () => {
-  const { user, loadUser, setUser } = useAuth();
 
+const { user, loadUser, setUser, login } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('123 Lê Lợi, Q1, TP.HCM');
   const [image, setImage] = useState(null);
-
+  const [loading, setLoading] = useState(false);
+  
+  useEffect(() => {
+  const fetchUser = async () => {
+    setLoading(true);
+    await loadUser();
+    setLoading(false);
+  };
+  fetchUser();
+}, []);
   useEffect(() => {
     const fetchUser = async () => {
       await loadUser();
@@ -59,11 +69,13 @@ const ProfileScreen = () => {
     }
   };
 
-  const handleSave = async () => {
+const handleSave = async () => {
   if (!name || !email || !phone) {
     Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin.');
     return;
   }
+
+  setLoading(true); // Bắt đầu loading
 
   try {
     const formData = new FormData();
@@ -80,12 +92,9 @@ const ProfileScreen = () => {
     }
 
     const res = await fetch(`https://datn-sever.onrender.com/users/update/${user._id}`, {
-      method: 'PUT', // hoặc POST nếu backend bạn hỗ trợ POST cập nhật
+      method: 'PUT',
       body: formData,
-      headers: {
-        Accept: 'application/json',
-        // ❌ KHÔNG thêm Content-Type thủ công
-      },
+      headers: { Accept: 'application/json' },
     });
 
     const data = await res.json();
@@ -99,13 +108,32 @@ const ProfileScreen = () => {
       avatar: image || user.avatar || null,
     };
 
-    setUser(updatedUser);
+    // --- LOG user mới trước khi lưu ---
+    console.log('📝 USER VỪA CẬP NHẬT:', updatedUser);
+
+    await login(updatedUser); // <-- Lưu vào AsyncStorage và store
+
+    // --- Log kiểm tra lại trong AsyncStorage ---
+    const userStr = await AsyncStorage.getItem('user');
+    console.log('📦 USER TRONG ASYNCSTORAGE:', userStr);
+
     Alert.alert('✅ Thành công', 'Thông tin hồ sơ đã được cập nhật.');
   } catch (err) {
     console.error('❌ Lỗi khi cập nhật:', err.message);
     Alert.alert('Lỗi', err.message || 'Không thể cập nhật thông tin');
+  } finally {
+    setLoading(false); // <-- THÊM VÀO ĐÂY: Kết thúc loading dù thành công hay lỗi
   }
 };
+  if (loading) {
+  return (
+    <View style={{flex:1, justifyContent:'center', alignItems:'center', backgroundColor:'#fff'}}>
+      <ActivityIndicator size="large" color="#8B5A2B" />
+      <Text style={{marginTop:16, fontSize:16, color:'#8B5A2B'}}>Đang tải...</Text>
+    </View>
+  );
+}
+
 
   return (
     <ScrollView style={styles.container}>
@@ -179,16 +207,8 @@ const ProfileScreen = () => {
       </View>
 
       <View style={styles.infoBox}>
-        <Text style={styles.infoText}>Vai trò: {user?.role || 'N/A'}</Text>
-        <Text style={styles.infoText}>
-          Trạng thái: {user?.isActive ? 'Đang hoạt động' : 'Không hoạt động'}
-        </Text>
-        <Text style={styles.infoText}>
-          Ngày tạo: {user?.createdAt ? new Date(user.createdAt).toLocaleString() : 'N/A'}
-        </Text>
-        <Text style={styles.infoText}>
-          Cập nhật: {user?.updatedAt ? new Date(user.updatedAt).toLocaleString() : 'N/A'}
-        </Text>
+        <Text style={styles.infoText}>Thông tin cá nhân của bạn sẽ được bảo mật tuyệt đối.</Text>
+        <Text style={styles.infoText}>Bạn có thể cập nhật thông tin bất cứ lúc nào.</Text>
       </View>
 
       <TouchableOpacity style={styles.button} onPress={handleSave}>

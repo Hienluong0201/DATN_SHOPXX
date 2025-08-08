@@ -150,7 +150,7 @@ export default function AdvancedFilterScreen() {
           onPress={() => router.back()}
           style={{ marginRight: 12, padding: 5 }}
         >
-          <Ionicons name="arrow-back" size={26} color="#007AFF" />
+          <Ionicons name="arrow-back" size={26} color="#8B4513" />
         </TouchableOpacity>
         <Text style={styles.heading}>Bộ Lọc Sản Phẩm</Text>
       </View>
@@ -215,7 +215,7 @@ export default function AdvancedFilterScreen() {
           </View>
         </View>
         <TouchableOpacity style={styles.filterButton} onPress={handleApplyFilter}>
-          <LinearGradient colors={['#007AFF', '#005BB5']} style={styles.filterButtonGradient}>
+          <LinearGradient colors={['#8B4513', '#8B4513']} style={styles.filterButtonGradient}>
             <Text style={styles.filterButtonText}>Áp dụng bộ lọc</Text>
           </LinearGradient>
         </TouchableOpacity>
@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
   inputIcon: { marginRight: 10 },
   selectBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#ddd', borderRadius: 12, padding: 14, marginTop: 8, backgroundColor: '#fff' },
   selectText: { flex: 1, color: '#333', fontSize: 13 },
-  filterButton: { marginTop: 24, borderRadius: 12, overflow: 'hidden' },
+  filterButton: { marginTop: 24, borderRadius: 12, overflow: 'hidden', backgroundColor: '#8B4513',   },
   filterButtonGradient: { paddingVertical: 16, alignItems: 'center' },
   filterButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   resultTitle: { fontSize: 22, fontWeight: '600', marginTop: 24, marginBottom: 12, color: '#333' },

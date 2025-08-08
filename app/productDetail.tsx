@@ -63,7 +63,11 @@ const { getProductById, addToCart, fetchProductVariants, loading, error } = useP
         : [{ type: 'image', url: product.Image }]),
     ];
   }, [product]);
-
+  const formatPrice = (price) => {
+  if (typeof price !== 'number') price = Number(price);
+  if (isNaN(price)) return price;
+  return price.toLocaleString('vi-VN');
+};
   // Hàm mở tìm kiếm hình ảnh trên TinEye
 const openTinEyeImageSearch = (imageUrl) => {
   const url = `https://tineye.com/search?url=${encodeURIComponent(imageUrl)}`;
@@ -419,7 +423,7 @@ const averageRating = calcAverageRating(reviews);
         <View style={styles.details}>
           <Text style={styles.name}>{product.Name}</Text>
           <View style={styles.priceContainer}>
-            <Text style={styles.price}>{product.Price} VNĐ</Text>
+           <Text style={styles.price}>{formatPrice(product.Price)} VNĐ</Text>
             <View style={styles.ratingContainer}>
               {[1, 2, 3, 4, 5].map((i) => (
                 <Ionicons
