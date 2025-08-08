@@ -1,3 +1,4 @@
+
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
@@ -155,7 +156,7 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
-
+    implementation "com.google.android.gms:play-services-auth:20.7.0"
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
     def isWebpAnimatedEnabled = (findProperty('expo.webp.animated') ?: "") == "true";
@@ -179,4 +180,7 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+    implementation 'com.facebook.android:facebook-android-sdk:[12.3.0,13)'
+
 }
+apply plugin: 'com.google.gms.google-services'
