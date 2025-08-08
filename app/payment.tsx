@@ -27,7 +27,24 @@ const Payment = () => {
     setModalConfig({ type, title, message });
     setModalVisible(true);
   };
-
+// Đổi phương thức thanh toán sang COD
+  const handleChangeToCOD = async (order) => {
+    try {
+      const resp = await AxiosInstance().patch(`/order/${order._id}/change-method`, {
+        method: 'Tiền mặt'
+      });
+      showModal('success', 'Đã chuyển sang tiền mặt', 'Bạn sẽ thanh toán khi nhận hàng.');
+      // Reload lại danh sách đơn hàng
+      setLoading(true);
+      const res = await AxiosInstance().get(`/order/unpaid-gateway-orders`);
+      const unpaidOrders = (res.orders || []).filter(o => o.userID === user._id);
+      unpaidOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      setOrders(unpaidOrders);
+      setLoading(false);
+    } catch (e) {
+      showModal('error', 'Lỗi', e.response?.data?.message || 'Không thể chuyển sang COD');
+    }
+  };
   // Cập nhật now mỗi giây (giúp tất cả countdown đều chạy)
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -40,7 +57,7 @@ const Payment = () => {
     const fetchOrders = async () => {
       setLoading(true);
       try {
-        const res = await AxiosInstance().get(`/order/unpaid-zalopay`);
+        const res = await AxiosInstance().get(`/order/unpaid-gateway-orders`);
         // Chỉ lấy đơn của user hiện tại
         const unpaidOrders = (res.orders || []).filter(o => o.userID === user._id);
         unpaidOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -169,6 +186,15 @@ const Payment = () => {
                   <Ionicons name="logo-usd" size={18} color="#fff" />
                   <Text style={styles.payButtonText}>Thanh toán ngay</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.codButton, timeLeft <= 0 && styles.payButtonDisabled]}
+                  onPress={() => handleChangeToCOD(order)}
+                  disabled={timeLeft <= 0}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="cash-outline" size={18} color="#fff" />
+                  <Text style={styles.payButtonText}>Đổi sang tiền mặt</Text>
+                </TouchableOpacity>
               </TouchableOpacity>
             );
           })}
@@ -186,6 +212,15 @@ const Payment = () => {
 };
 
 const styles = StyleSheet.create({
+  codButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: '#4caf50',
+  paddingVertical: 11,
+  borderRadius: 18,
+  marginTop: 10
+},
   container: { flex: 1, backgroundColor: '#fff', paddingTop: 45, paddingHorizontal: 8 },
   backButtonWrap: { position: 'absolute', top: 60, left: 16, zIndex: 100 },
   pageTitle: { textAlign: 'center', fontSize: 23, fontWeight: 'bold', color: '#8B5A2B', marginBottom: 18, marginTop: 10 },

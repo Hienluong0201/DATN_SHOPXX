@@ -3,7 +3,17 @@ import { useState } from 'react';
 import { router } from 'expo-router';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import AxiosInstance from '../axiosInstance/AxiosInstance';
+import CustomModal from './components/CustomModal'; // hoặc đường dẫn đúng tùy dự án bạn
 
+type ModalType = 'success' | 'error' | 'warning';
+interface ModalState {
+  isVisible: boolean;
+  type: ModalType;
+  title: string;
+  message: string;
+  onConfirm?: () => void;
+  showConfirmButton?: boolean;
+}
 export default function RegisterScreen() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -12,21 +22,73 @@ export default function RegisterScreen() {
   const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
+  const [modal, setModal] = useState<ModalState>({
+  isVisible: false,
+  type: 'success',
+  title: '',
+  message: '',
+  onConfirm: undefined,
+  showConfirmButton: false,
+});
+const showModal = ({
+  type = 'error',
+  title = '',
+  message = '',
+  onConfirm,
+  showConfirmButton = false,
+}: Partial<ModalState>) => {
+  setModal({
+    isVisible: true,
+    type,
+    title,
+    message,
+    onConfirm,
+    showConfirmButton,
+  });
+};
   const handleRegister = async () => {
     if (!username || !password || !confirmPassword || !email || !phone) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin');
+      showModal({
+        type: 'warning',
+        title: 'Lỗi',
+        message: 'Vui lòng nhập đầy đủ thông tin',
+      });
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Lỗi', 'Mật khẩu không khớp');
+      showModal({
+      type: 'error',
+      title: 'Lỗi',
+      message: 'Mật khẩu không khớp',
+    });
+      return;
+    }
+    if (password.length < 6) {
+      showModal({
+      type: 'error',
+      title: 'Lỗi',
+      message: 'Mật khẩu phải có ít nhất 6 ký tự',
+    });
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+     showModal({
+      type: 'error',
+      title: 'Lỗi',
+      message: 'Email không hợp lệ',
+    });
       return;
     }
 
     const phoneRegex = /^(0|\+84)(3|5|7|8|9)[0-9]{8}$/;
     if (!phoneRegex.test(phone)) {
-      Alert.alert('Lỗi', 'Số điện thoại không hợp lệ');
+      showModal({
+      type: 'error',
+      title: 'Lỗi',
+      message: 'Số điện thoại không hợp lệ',
+    });
       return;
     }
 
@@ -44,17 +106,31 @@ export default function RegisterScreen() {
       console.log('Dữ liệu nhận về:', res);
 
       if (res && res._id) {
-        Alert.alert('Thành công', `${res.name} đã đăng ký thành công!`);
+        showModal({
+        type: 'success',
+        title: 'Thành công',
+        message: `${res.name} đã đăng ký thành công!`,
+        onConfirm: () => router.replace('/login'),
+        showConfirmButton: true,
+      });
         router.replace('/login');
       } else {
-        Alert.alert('Lỗi', 'Đăng ký thất bại, vui lòng thử lại');
+       showModal({
+        type: 'error',
+        title: 'Lỗi',
+        message: 'Đăng ký thất bại, vui lòng thử lại',
+      });
       }
     } catch (error: any) {
       const message =
         error.response?.data?.message ||
         error.message ||
         'Có lỗi xảy ra, vui lòng thử lại sau';
-      Alert.alert('Lỗi', message);
+      showModal({
+      type: 'error',
+      title: 'Lỗi',
+      message,
+    });
     }
   };
 
@@ -114,6 +190,15 @@ export default function RegisterScreen() {
       >
         <Text style={styles.buttonText}>Đăng ký</Text>
       </TouchableOpacity>
+      <CustomModal
+        isVisible={modal.isVisible}
+        type={modal.type}
+        title={modal.title}
+        message={modal.message}
+        onClose={() => setModal((prev) => ({ ...prev, isVisible: false }))}
+        onConfirm={modal.onConfirm}
+        showConfirmButton={modal.showConfirmButton}
+      />
     </KeyboardAvoidingView>
   );
 }

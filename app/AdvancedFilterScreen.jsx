@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import {
   View,
   Text,
@@ -33,7 +34,6 @@ export default function AdvancedFilterScreen() {
   const [isSearched, setIsSearched] = useState(false); // Chỉ render sản phẩm khi bấm tìm kiếm
   const router = useRouter();
   const LIMIT = 10;
-
   const fetchCategories = async () => {
     try {
       const res = await fetch(`https://datn-sever.onrender.com/category?status=true`);
@@ -150,7 +150,7 @@ export default function AdvancedFilterScreen() {
           onPress={() => router.back()}
           style={{ marginRight: 12, padding: 5 }}
         >
-          <Ionicons name="arrow-back" size={26} color="#007AFF" />
+          <Ionicons name="arrow-back" size={26} color="#8B4513" />
         </TouchableOpacity>
         <Text style={styles.heading}>Bộ Lọc Sản Phẩm</Text>
       </View>
@@ -167,14 +167,32 @@ export default function AdvancedFilterScreen() {
             <Text style={styles.label}>Giá từ</Text>
             <View style={styles.inputContainer}>
               <Ionicons name="cash-outline" size={18} color="#555" style={styles.inputIcon} />
-              <TextInput style={styles.input} keyboardType="numeric" placeholder="Min" value={minPrice} onChangeText={setMinPrice} />
+                <TextInput
+                  style={styles.input}
+                  keyboardType="number-pad"
+                  placeholder="Min"
+                  value={minPrice?.toString() || ''}
+                  onChangeText={(text) => {
+                    const onlyNumber = text.replace(/[^0-9]/g, '');
+                    setMinPrice(onlyNumber);
+                  }}
+                />
             </View>
           </View>
           <View style={styles.halfBox}>
             <Text style={styles.label}>Giá đến</Text>
             <View style={styles.inputContainer}>
               <Ionicons name="cash-outline" size={18} color="#555" style={styles.inputIcon} />
-              <TextInput style={styles.input} keyboardType="numeric" placeholder="Max" value={maxPrice} onChangeText={setMaxPrice} />
+                <TextInput
+                  style={styles.input}
+                  keyboardType="number-pad"
+                  placeholder="Max"
+                  value={maxPrice?.toString() || ''}
+                  onChangeText={(text) => {
+                    const onlyNumber = text.replace(/[^0-9]/g, '');
+                    setMaxPrice(onlyNumber);
+                  }}
+                />
             </View>
           </View>
         </View>
@@ -184,7 +202,7 @@ export default function AdvancedFilterScreen() {
             <Text style={styles.label}>Sắp xếp</Text>
             <TouchableOpacity style={styles.selectBox} onPress={() => setSortModalVisible(true)}>
               <Ionicons name="swap-vertical-outline" size={18} color="#555" style={styles.inputIcon} />
-              <Text style={styles.selectText}>{sort === 'price_asc' ? 'Giá tăng dần' : sort === 'price_desc' ? 'Giá giảm dần' : 'Không sắp xếp'}</Text>
+              <Text style={styles.selectText}>{sort === 'price_asc' ? 'Giá tăng dần' : sort === 'price_desc' ? 'Giá giảm dần' : 'Không sắp'}</Text>
               <Ionicons name="chevron-down" size={18} color="#555" />
             </TouchableOpacity>
           </View>
@@ -197,7 +215,7 @@ export default function AdvancedFilterScreen() {
           </View>
         </View>
         <TouchableOpacity style={styles.filterButton} onPress={handleApplyFilter}>
-          <LinearGradient colors={['#007AFF', '#005BB5']} style={styles.filterButtonGradient}>
+          <LinearGradient colors={['#8B4513', '#8B4513']} style={styles.filterButtonGradient}>
             <Text style={styles.filterButtonText}>Áp dụng bộ lọc</Text>
           </LinearGradient>
         </TouchableOpacity>
@@ -205,7 +223,15 @@ export default function AdvancedFilterScreen() {
       <Text style={styles.resultTitle}>Sản phẩm</Text>
     </View>
   );
-
+    const renderMemoizedHeader = useMemo(() => renderFilterHeader(), [
+      selectedCategory,
+      minPrice,
+      maxPrice,
+      sort,
+      minRating,
+      categoryModalVisible,
+      sortModalVisible,
+    ]);
   return (
     <View style={{ flex: 1 }}>
       {/* Nếu loading và đã bấm tìm kiếm thì show skeleton shimmer */}
@@ -222,7 +248,7 @@ export default function AdvancedFilterScreen() {
           onEndReached={isSearched ? handleLoadMore : null}
           onEndReachedThreshold={0.5}
           ListFooterComponent={isSearched ? renderFooter : null}
-          ListHeaderComponent={renderFilterHeader}
+          ListHeaderComponent={renderMemoizedHeader}
           columnWrapperStyle={{ gap: 8, justifyContent: 'space-between' }}
           contentContainerStyle={{ padding: 8 }}
           renderItem={({ item }) => (
@@ -329,7 +355,7 @@ const styles = StyleSheet.create({
   inputIcon: { marginRight: 10 },
   selectBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#ddd', borderRadius: 12, padding: 14, marginTop: 8, backgroundColor: '#fff' },
   selectText: { flex: 1, color: '#333', fontSize: 13 },
-  filterButton: { marginTop: 24, borderRadius: 12, overflow: 'hidden' },
+  filterButton: { marginTop: 24, borderRadius: 12, overflow: 'hidden', backgroundColor: '#8B4513',   },
   filterButtonGradient: { paddingVertical: 16, alignItems: 'center' },
   filterButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   resultTitle: { fontSize: 22, fontWeight: '600', marginTop: 24, marginBottom: 12, color: '#333' },

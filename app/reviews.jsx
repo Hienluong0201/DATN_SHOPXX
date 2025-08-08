@@ -30,7 +30,7 @@ const ORDER_STATUS_VI = {
   cancelled: "Đã hủy",
 };
 
-const ChatWithShop = () => {
+const ChatWithShop = ({ onClose }) => {
   const { user } = useAuth();
   const userID = user?._id;
   const { fetchProducts, products, loading: productLoading } = useProducts();
@@ -61,17 +61,28 @@ const ChatWithShop = () => {
   // ----- FETCH & SOCKET -----
   // Lấy đơn hàng user khi mở modal
   const fetchUserOrders = async () => {
-    if (!userID) return;
-    setOrdersLoading(true);
-    try {
-      const res = await AxiosInstance().get(`/order/user/${userID}`);
-      setUserOrders(Array.isArray(res) ? res : []);
-    } catch {
-      setUserOrders([]);
-    } finally {
-      setOrdersLoading(false);
+  if (!userID) return;
+  setOrdersLoading(true);
+  try {
+    const res = await AxiosInstance().get(`/order/user/${userID}`);
+    console.log('DATA ĐƠN HÀNG:', res);
+
+    // Kiểm tra chi tiết item của đơn đầu tiên (nếu có)
+    if (Array.isArray(res) && res.length > 0) {
+      res.forEach((order, idx) => {
+        console.log(`Đơn hàng [${idx}] có items:`, order.items);
+      });
     }
-  };
+
+    setUserOrders(Array.isArray(res) ? res : []);
+  } catch (err) {
+    setUserOrders([]);
+    console.log('LỖI LẤY ĐƠN:', err?.response?.data || err?.message);
+  } finally {
+    setOrdersLoading(false);
+  }
+};
+
 
   // Load tin nhắn
   const fetchMessages = async () => {
@@ -241,13 +252,25 @@ const ChatWithShop = () => {
     }
   };
 
-  const goBack = () => router.back();
+  const goBack = () => {
+    if (onClose) onClose(); // đóng modal thay vì router.back()
+  };
 
   // Render tin nhắn: text, order hoặc product card
   const renderMessage = ({ item }) => {
     if (item.type === 'order' && item.orderInfo) {
       return (
+        
         <View style={[styles.messageContainer, item.sender === 'user' ? styles.userMessage : styles.shopMessage]}>
+          <TouchableOpacity
+            style={styles.orderCard}
+           onPress={() => {
+              router.push({
+                pathname: '/orderDetail',
+                params: { orderId: item.orderInfo.orderId }
+              });
+            }}
+          >
           <View style={styles.orderCardMsg}>
             <Ionicons name="receipt-outline" size={22} color="#b8860b" />
             <Text style={styles.orderMsgTitle}>ĐƠN HÀNG #{item.orderInfo.orderId.slice(0, 8)}</Text>
@@ -262,19 +285,39 @@ const ChatWithShop = () => {
               </Text>
             )}
           </View>
+           </TouchableOpacity>
         </View>
+       
       );
     }
     if (item.type === 'product' && item.productInfo) {
       return (
         <View style={[styles.messageContainer, item.sender === 'user' ? styles.userMessage : styles.shopMessage]}>
           <View style={styles.productCardMsg}>
+          <TouchableOpacity
+            onPress={() => {
+              router.push({
+                pathname: '/productDetail',
+                params: { productId: item.productInfo.id }
+              });
+            }}
+            activeOpacity={0.8}
+          >
             <Image
               source={{ uri: item.productInfo.image || 'https://via.placeholder.com/100' }}
               style={{ width: 70, height: 70, borderRadius: 9, marginRight: 10, backgroundColor: '#eee' }}
             />
+          </TouchableOpacity>
+
+
             <View>
-              <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#6c390a', marginBottom: 2 }}>{item.productInfo.name}</Text>
+             <Text
+              style={{ fontWeight: 'bold', fontSize: 15, color: '#6c390a', marginBottom: 2, maxWidth: 90 }}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {item.productInfo.name}
+            </Text>
               <Text style={{ color: '#c0392b', fontWeight: '600' }}>{item.productInfo.price}đ</Text>
             </View>
           </View>
@@ -432,7 +475,7 @@ const ChatWithShop = () => {
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={goBack} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#2c2c2c" />
+            <Ionicons name="close" size={26} color="#2c2c2c" />
           </TouchableOpacity>
           <Text style={styles.title}>Chat với Shop</Text>
           <View style={styles.placeholder} />
@@ -504,13 +547,13 @@ const ChatWithShop = () => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-      <View style={{ height: 100 }} />
+     
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f6fa', marginTop: 20 },
+  container: { flex: 1, backgroundColor: '#f5f6fa' },
   keyboardContainer: { flex: 1 },
   header: {
     flexDirection: 'row',

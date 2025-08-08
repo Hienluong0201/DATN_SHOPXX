@@ -29,8 +29,7 @@ import BannerComponent from '../components/BannerComponent';
 import CategoriesComponent from '../components/CategoriesComponent';
 import QuickAccessComponent from '../components/QuickAccessComponent';
 import ProductsComponent from '../components/ProductsComponent';
-import AdvancedFilterScreen from '../AdvancedFilterScreen';
-
+import AIChatBubble from '../components/AIChatBubble';
 export default function HomeScreen() {
   const { user, loadUser, setUser } = useAuth();
   const { categories, products, fetchProducts, loading, error, fetchCategories, fetchWishlist, wishlist, addToWishlist, removeFromWishlist, isInWishlist, getWishlistId, fetchProductVariants } = useProducts();
@@ -128,7 +127,7 @@ export default function HomeScreen() {
       await AxiosInstance().post('/cart', {
         userID: user._id,
         productVariant: variantId,
-        soluong: quantity, // <-- Truyền số lượng chọn ở đây!
+        soluong: quantity,
       });
       showModal('success', 'Thành công', `${currentProduct.Name} đã được thêm vào giỏ hàng!`);
     } catch (err: any) {
@@ -332,6 +331,8 @@ export default function HomeScreen() {
         variants={currentVariants}
         product={currentProduct}
       />
+        <AIChatBubble />
+
     </View>
   );
 }

@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(23, 13, 13, 0.5)',
   },
   modalContent: {
     backgroundColor: '#fff',
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   categoryButton: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#8B4513',
     paddingVertical: 8,
     paddingHorizontal: 15,
     borderRadius: 20,

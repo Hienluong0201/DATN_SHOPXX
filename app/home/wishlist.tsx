@@ -15,7 +15,7 @@ import { useAuth } from '../../store/useAuth';
 import AxiosInstance from '../../axiosInstance/AxiosInstance';
 import { Ionicons } from '@expo/vector-icons';
 import CustomModal from '../components/CustomModal';
-
+import { useFocusEffect } from '@react-navigation/native';
 const emptyImg = require('../../assets/images/laughing.png');
 const { width } = Dimensions.get('window');
 const CARD_MARGIN = 10;
@@ -102,7 +102,11 @@ const Wishlist = () => {
   useEffect(() => {
     fetchWishlist();
   }, [user]);
-
+  useFocusEffect(
+  React.useCallback(() => {
+    fetchWishlist();
+  }, [user?._id])
+);
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchWishlist();

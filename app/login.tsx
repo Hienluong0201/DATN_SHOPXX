@@ -11,7 +11,7 @@ import {
   GraphRequestManager,
 } from 'react-native-fbsdk-next';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import auth from '@react-native-firebase/auth';
+
 
 // Cấu hình Google Signin (đặt webClientId chính xác của bạn)
 GoogleSignin.configure({

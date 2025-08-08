@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback ,useMemo} from 'react';
 import {
   View,
   Text,
@@ -18,7 +18,9 @@ import { Ionicons } from '@expo/vector-icons';
 import RenderHtml from 'react-native-render-html';
 import { useWindowDimensions } from 'react-native';
 import CustomModal from './components/CustomModal'; // Import CustomModal (đảm bảo đường dẫn đúng)
-
+import { Video } from 'expo-av';
+import { KeyboardAvoidingView, Platform } from 'react-native';
+import * as Linking from 'expo-linking';
 // Hàm gọi API thêm vào giỏ hàng
 const addToCartAPI = async (userID, productVariant, soluong) => {
   try {
@@ -34,22 +36,6 @@ const addToCartAPI = async (userID, productVariant, soluong) => {
   }
 };
 
-// Hàm gọi API gửi review
-const sendReviewAPI = async ({ userID, productID, rating, comment }) => {
-  try {
-    const res = await AxiosInstance().post('/review', {
-      userID,
-      productID,
-      rating,
-      comment,
-      status: 'true', // Review mới mặc định trạng thái pending
-    });
-    return res.data;
-  } catch (error) {
-    const errorMsg = error?.response?.data?.message || error.message || 'Lỗi khi gửi đánh giá';
-    throw new Error(errorMsg);
-  }
-};
 
 const ProductDetail = () => {
 const { productId } = useLocalSearchParams();
@@ -58,13 +44,35 @@ const { getProductById, addToCart, fetchProductVariants, loading, error } = useP
   const [product, setProduct] = useState(null);
   const [variants, setVariants] = useState([]);
   const [selectedVariant, setSelectedVariant] = useState(null);
-  const [quantity, setQuantity] = useState(1);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const { user } = useAuth();
   const [reviews, setReviews] = useState([]);
   const [reviewTab, setReviewTab] = useState(0);
   const { width } = useWindowDimensions();
- 
+  const [quantity, setQuantity] = useState(1);
+  const [quantityInput, setQuantityInput] = useState('1');
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const gallery = useMemo(() => {
+    if (!product) return [];
+    return [
+      ...(Array.isArray(product.Videos) && product.Videos.length > 0
+        ? product.Videos.map((v) => ({ type: 'video', url: v }))
+        : []),
+      ...(Array.isArray(product.Images) && product.Images.length > 0
+        ? product.Images.map((img) => ({ type: 'image', url: img }))
+        : [{ type: 'image', url: product.Image }]),
+    ];
+  }, [product]);
+  const formatPrice = (price) => {
+  if (typeof price !== 'number') price = Number(price);
+  if (isNaN(price)) return price;
+  return price.toLocaleString('vi-VN');
+};
+  // Hàm mở tìm kiếm hình ảnh trên TinEye
+const openTinEyeImageSearch = (imageUrl) => {
+  const url = `https://tineye.com/search?url=${encodeURIComponent(imageUrl)}`;
+  Linking.openURL(url);
+};
   // State để quản lý CustomModal
   const [modalVisible, setModalVisible] = useState(false);
   const [modalConfig, setModalConfig] = useState({
@@ -94,36 +102,125 @@ const { getProductById, addToCart, fetchProductVariants, loading, error } = useP
   };
 
   // Lấy dữ liệu sản phẩm, biến thể, review
-  const loadData = useCallback(async () => {
+const loadData = useCallback(async () => {
   if (!id || typeof id !== 'string' || isDataLoaded) return;
   setIsDataLoaded(false);
-  try {
-    // Ví dụ fetch API sản phẩm detail
-    const fetchedProduct = getProductById ? getProductById(id) : null;
-    const fetchedVariants = await fetchProductVariants(id);
-    let reviewData = [];
-    try {
-      reviewData = await AxiosInstance().get(`/review/product/${id}`);
-      setReviews(reviewData || []);
-    } catch (err) {
-      setReviews([]);
-    }
-    setProduct(fetchedProduct || null);
-    setVariants(fetchedVariants || []);
-    setSelectedVariant(fetchedVariants.length ? fetchedVariants[0] : null);
-    setIsDataLoaded(true);
-  } catch (err) {
-    setIsDataLoaded(true);
-  }
-}, [id, getProductById, fetchProductVariants, isDataLoaded]);
 
-  // Reload lại data sau khi gửi review thành công
-  const reloadReview = async () => {
-    try {
-      const reviewData = await AxiosInstance().get(`/review/product/${productId}`);
-      setReviews(reviewData || []);
-    } catch {}
-  };
+  let productRes = null;
+  let fetchedVariants = [];
+  let images = [];
+  let videos = [];
+  let imgData = null;
+
+  // 1. Lấy chi tiết sản phẩm
+  try {
+    productRes = await AxiosInstance().get(`/products/${id}`);
+  } catch (err) {
+  }
+
+  // 2. Lấy biến thể sản phẩm
+  try {
+    fetchedVariants = await fetchProductVariants(id);
+  } catch (err) {
+
+  }
+
+  // 3. Lấy ảnh/video bảng Image
+  try {
+  const imgRes = await AxiosInstance().get(`/img?productID=${id}`);
+  console.log("==== IMAGE TABLE RESPONSE ====");
+  console.log(imgRes);
+
+  images = [];
+  videos = [];
+  if (Array.isArray(imgRes)) {
+    imgRes.forEach(item => {
+      if (Array.isArray(item.imageURL) && item.imageURL.length > 0) {
+        images.push(...item.imageURL);
+      }
+      if (Array.isArray(item.videoURL) && item.videoURL.length > 0) {
+        videos.push(...item.videoURL);
+      }
+    });
+  } else {
+    if (Array.isArray(imgRes.imageURL) && imgRes.imageURL.length > 0) {
+      images = imgRes.imageURL;
+    }
+    if (Array.isArray(imgRes.videoURL) && imgRes.videoURL.length > 0) {
+      videos = imgRes.videoURL;
+    }
+  }
+} catch (err) {
+  console.log("==== IMAGE TABLE ERROR ====");
+  console.log(err);
+}
+
+  // 4. Fallback lấy ảnh/video từ product hoặc variant nếu Image chưa có
+  if (!images.length && productRes && Array.isArray(productRes.images) && productRes.images.length > 0) {
+    images = productRes.images;
+    console.log("Fallback IMAGE FROM PRODUCT");
+    console.log(images);
+  }
+  if (!videos.length && productRes && Array.isArray(productRes.videos) && productRes.videos.length > 0) {
+    videos = productRes.videos;
+    console.log("Fallback VIDEO FROM PRODUCT");
+    console.log(videos);
+  }
+  if (!images.length && fetchedVariants.length > 0) {
+    const variantWithImage = fetchedVariants.find(v => Array.isArray(v.images) && v.images.length > 0);
+    images = variantWithImage ? variantWithImage.images : [];
+    console.log("Fallback IMAGE FROM VARIANT");
+    console.log(images);
+  }
+  if (!images.length) {
+    images = ['https://via.placeholder.com/150'];
+    console.log("Fallback IMAGE: Placeholder");
+  }
+
+  // 5. Thông tin chính sản phẩm
+  const baseProduct = productRes || (fetchedVariants.length > 0 ? fetchedVariants[0].productID : {});
+  console.log("==== FINAL PRODUCT INFO (FOR UI) ====");
+  console.log({
+    ProductID: baseProduct._id,
+    Name: baseProduct.name,
+    Description: baseProduct.description,
+    Price: baseProduct.price,
+    Image: images[0],
+    Images: images,
+    Videos: videos,
+    Rating: baseProduct.averageRating || 0,
+    Status: typeof baseProduct.status === "boolean" ? baseProduct.status : true,
+  });
+
+  setProduct({
+    ProductID: baseProduct._id,
+    Name: baseProduct.name,
+    Description: baseProduct.description,
+    Price: baseProduct.price,
+    Image: images[0],
+    Images: images,
+    Videos: videos,
+    Rating: baseProduct.averageRating || 0,
+    Status: typeof baseProduct.status === "boolean" ? baseProduct.status : true,
+  });
+
+  setVariants(fetchedVariants || []);
+  setSelectedVariant(fetchedVariants.length ? fetchedVariants[0] : null);
+
+  // 6. Lấy review
+  try {
+    const reviewData = await AxiosInstance().get(`/review/product/${id}`);
+    console.log("==== REVIEW DATA ====");
+    console.log(reviewData);
+    setReviews(reviewData || []);
+  } catch (err) {
+    console.log("==== REVIEW ERROR ====");
+    console.log(err);
+    setReviews([]);
+  }
+
+  setIsDataLoaded(true);
+}, [id, isDataLoaded]);
 
   useFocusEffect(
     useCallback(() => {
@@ -144,7 +241,12 @@ const { getProductById, addToCart, fetchProductVariants, loading, error } = useP
   ];
   const filteredReviews =
     reviewTab === 0 ? reviews : reviews.filter((r) => r.rating === reviewTab);
-
+  const calcAverageRating = (reviewsArr) => {
+  if (!reviewsArr.length) return 0;
+  const total = reviewsArr.reduce((sum, r) => sum + (r.rating || 0), 0);
+  return total / reviewsArr.length;
+};
+const averageRating = calcAverageRating(reviews);
   // Xử lý thêm vào giỏ hàng
   const handleAddToCart = useCallback(async () => {
     if (!user || !user._id) {
@@ -209,6 +311,7 @@ const { getProductById, addToCart, fetchProductVariants, loading, error } = useP
   if (variants.length === 0) {
     return (
       <View style={styles.container}>
+        
         <ScrollView contentContainerStyle={{ paddingBottom: 70 }}>
           <Image source={{ uri: product.Image }} style={styles.image} />
           <View style={styles.details}>
@@ -249,42 +352,86 @@ const { getProductById, addToCart, fetchProductVariants, loading, error } = useP
     variants.filter((v) => v.color === color).map((v) => v.size);
 
   return (
-    <View style={styles.container}>
+     <View style={styles.container}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 10 }}>
+           {/* Nút Back */}
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+
+          {/* Icon Giỏ Hàng */}
+          <TouchableOpacity onPress={() => router.push('/home/cart')}>
+            <Ionicons name="cart-outline" size={24} color="#333" />
+          </TouchableOpacity>
+        </View>
+          <KeyboardAvoidingView
+    style={{ flex: 1 }}
+    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 40}
+  >
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 70 }}
+        contentContainerStyle={{ paddingBottom: 80 }}
       >
         {/* Ảnh sản phẩm */}
-        <FlatList
-            data={product.Images || [product.Image]}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(_, index) => index.toString()}
-            renderItem={({ item }) => (
-              <Image
-                source={{ uri: item }}
-                style={{
-                  width: width, // lấy width từ useWindowDimensions()
-                  height: 350,
-                  resizeMode: 'contain',
-                  backgroundColor: '#f5f5f5',
-                }}
-              />
-            )}
-          />
+      <FlatList
+        data={gallery}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(_, index) => index.toString()}
+        removeClippedSubviews={false}
+        windowSize={2}
+        initialNumToRender={1}
+        onMomentumScrollEnd={e => {
+          const newIndex = Math.round(e.nativeEvent.contentOffset.x / width);
+          setCurrentIndex(newIndex);
+        }}
+        renderItem={({ item, index }) =>
+          item.type === 'video' ? (
+            <Video
+              source={{ uri: item.url }}
+              useNativeControls
+              resizeMode="contain"
+              style={{ width: width, height: 350, backgroundColor: '#000' }}
+              onPlaybackStatusUpdate={status => {
+                console.log('Video status:', status);
+                if (status.isPlaying) console.log('User played video');
+              }}
+            />
+          ) : (
+            <Image
+              source={{ uri: item.url }}
+              style={{ width: width, height: 350, resizeMode: 'contain', backgroundColor: '#f5f5f5' }}
+            />
+          )
+        }
+      />      
+   {product?.Image && (
+  <View style={{flexDirection: 'row', justifyContent: 'center', marginTop: 8}}>
+    <TouchableOpacity
+      style={[styles.compareImageButton, {marginLeft: 8, backgroundColor: '#0089CF'}]}
+      onPress={() => openTinEyeImageSearch(product.Image)}
+    >
+      <Ionicons name="image" size={18} color="#fff" />
+      <Text style={styles.compareImageButtonText}>Tìm kiếm hình ảnh TinEye</Text>
+    </TouchableOpacity>
+  </View>
+)}
+
+
         <View style={styles.details}>
           <Text style={styles.name}>{product.Name}</Text>
           <View style={styles.priceContainer}>
-            <Text style={styles.price}>{product.Price} VNĐ</Text>
+           <Text style={styles.price}>{formatPrice(product.Price)} VNĐ</Text>
             <View style={styles.ratingContainer}>
               {[1, 2, 3, 4, 5].map((i) => (
                 <Ionicons
                   key={i}
                   name={
-                    product.Rating >= i
+                    averageRating >= i
                       ? 'star'
-                      : product.Rating >= i - 0.5
+                      : averageRating >= i - 0.5
                       ? 'star-half'
                       : 'star-outline'
                   }
@@ -294,9 +441,10 @@ const { getProductById, addToCart, fetchProductVariants, loading, error } = useP
                 />
               ))}
               <Text style={styles.ratingText}>
-                {` ${product.Rating ? product.Rating.toFixed(1) : '0.0'} (${totalReview} đánh giá)`}
+                {` ${averageRating.toFixed(1)} (${totalReview} đánh giá)`}
               </Text>
             </View>
+
           </View>
 
           <View style={{ minHeight: 40, marginBottom: 15 }}>
@@ -367,38 +515,48 @@ const { getProductById, addToCart, fetchProductVariants, loading, error } = useP
           {selectedVariant && (
             <>
               <Text style={styles.section}>Số lượng</Text>
-              <View style={styles.quantityContainer}>
-                <TouchableOpacity
-                  style={styles.quantityButton}
-                  onPress={() => setQuantity((prev) => Math.max(1, prev - 1))}
-                  disabled={quantity <= 1}
-                >
-                  <Text style={styles.quantityButtonText}>-</Text>
-                </TouchableOpacity>
-                <TextInput
-                  style={styles.quantityInput}
-                  value={quantity.toString()}
-                  keyboardType="numeric"
-                  onChangeText={(text) => {
-                    const num = parseInt(text) || 1;
-                    if (num <= (selectedVariant?.stock || 1)) setQuantity(num);
-                  }}
-                />
-                <TouchableOpacity
-                  style={styles.quantityButton}
-                  onPress={() =>
-                    setQuantity((prev) =>
-                      prev < (selectedVariant?.stock || 1) ? prev + 1 : prev
-                    )
-                  }
-                  disabled={quantity >= (selectedVariant?.stock || 1)}
-                >
-                  <Text style={styles.quantityButtonText}>+</Text>
-                </TouchableOpacity>
-                <Text style={styles.stockText}>
-                  Tồn kho: {selectedVariant?.stock || 0}
-                </Text>
-              </View>
+          <View style={styles.quantityContainer}>
+            <TouchableOpacity
+              style={styles.quantityButton}
+              onPress={() => {
+                const next = Math.max(1, quantity - 1);
+                setQuantity(next);
+                setQuantityInput(next.toString());
+              }}
+              disabled={quantity <= 1}
+            >
+              <Text style={styles.quantityButtonText}>-</Text>
+            </TouchableOpacity>
+            <TextInput
+              style={[styles.quantityInput, { paddingTop: 5 }]}
+              value={quantityInput}
+              keyboardType="numeric"
+              onChangeText={(text) => {
+                if (/^\d*$/.test(text)) setQuantityInput(text);
+              }}
+              onEndEditing={() => {
+                let num = parseInt(quantityInput, 10);
+                if (isNaN(num) || num < 1) num = 1;
+                if (num > (selectedVariant?.stock || 1)) num = selectedVariant?.stock || 1;
+                setQuantity(num);
+                setQuantityInput(num.toString());
+              }}
+            />
+            <TouchableOpacity
+              style={styles.quantityButton}
+              onPress={() => {
+                const next = Math.min(quantity + 1, selectedVariant?.stock || 1);
+                setQuantity(next);
+                setQuantityInput(next.toString());
+              }}
+              disabled={quantity >= (selectedVariant?.stock || 1)}
+            >
+              <Text style={styles.quantityButtonText}>+</Text>
+            </TouchableOpacity>
+            <Text style={styles.stockText}>
+              Tồn kho: {selectedVariant?.stock || 0}
+            </Text>
+          </View>
             </>
           )}
 
@@ -478,6 +636,7 @@ const { getProductById, addToCart, fetchProductVariants, loading, error } = useP
           )}
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
       {variants.length > 0 && (
         <View style={styles.actionContainer}>
           <TouchableOpacity style={styles.addToCartButton} onPress={handleAddToCart}>
@@ -500,10 +659,29 @@ const { getProductById, addToCart, fetchProductVariants, loading, error } = useP
         showConfirmButton={modalConfig.showConfirmButton}
       />
     </View>
+    
   );
 };
 
 const styles = StyleSheet.create({
+  compareImageButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  alignSelf: 'center',
+  marginVertical: 10,
+  backgroundColor: '#4285F4', // Google Blue
+  paddingHorizontal: 16,
+  paddingVertical: 8,
+  borderRadius: 24,
+  elevation: 3,
+},
+compareImageButtonText: {
+  color: '#fff',
+  fontWeight: 'bold',
+  fontSize: 15,
+  marginLeft: 6,
+},
+
   container: { flex: 1, backgroundColor: '#fff', marginTop: 40 },
   loadingContainer: {
     flex: 1,
@@ -549,6 +727,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginHorizontal: 10,
     fontSize: 16,
+    
   },
   stockText: { fontSize: 14, color: '#666', marginLeft: 10 },
   actionContainer: {

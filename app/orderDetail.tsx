@@ -10,10 +10,9 @@ import AxiosInstance from '../axiosInstance/AxiosInstance';
 import { useProducts } from '../store/useProducts';
 import { useAuth } from '../store/useAuth';
 import * as ImagePicker from 'expo-image-picker';
-import * as mime from 'react-native-mime-types'; 
 import Modal from 'react-native-modal';
 import { Ionicons as CustomModalIonicons } from '@expo/vector-icons';
-
+import { Linking } from 'react-native';
 const PRIMARY = "#e4633b";
 const cancelReasonsList = [
   'Đặt nhầm sản phẩm',
@@ -58,7 +57,7 @@ const formatDate = (dateString) =>
 const formatVoucher = (voucher) => {
   if (!voucher) return '';
   if (voucher.discountType === 'percent') {
-    return `Giảm ${voucher.discountValue}% (Tối đa ${voucher.usageLimit} lần)`;
+    return `Giảm ${voucher.discountValue}`;
   }
   if (voucher.discountType === 'fixed') {
     return `Giảm ${formatPrice(voucher.discountValue)}`;
@@ -134,7 +133,7 @@ const OrderDetail = () => {
   const [modalType, setModalType] = useState('success');
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
-
+  const [shopPhoneNumber, setShopPhoneNumber] = useState('0896238002');
   useEffect(() => {
     const fetchOrderDetails = async () => {
       setLoading(true);
@@ -328,7 +327,7 @@ const OrderDetail = () => {
         <TouchableOpacity onPress={goBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.title}>Chi tiết đơn hàng</Text>
+        <Text style={styles.title1}>Chi tiết đơn hàng</Text>
         <View style={{ width: 24 }} />
       </View>
       <View style={styles.statusCard}>
@@ -357,9 +356,7 @@ const OrderDetail = () => {
               ))}
             </ScrollView>
             <View style={styles.productInfo}>
-              <Text style={styles.productName}>{detail.Name}</Text>
-              <Text style={styles.productDetail}>Mã SP: <Text style={styles.attrValue}>{detail.variantID.productID}</Text></Text>
-              <Text style={styles.productDetail}>Thương hiệu: <Text style={styles.attrValue}>{detail.Brand}</Text></Text>
+              <Text style={styles.productName}>{detail.Name}</Text>   
               <Text style={styles.productDetail}>Kích thước: <Text style={styles.attrValue}>{detail.variantID.size}</Text></Text>
               <Text style={styles.productDetail}>Màu sắc: <Text style={styles.attrValue}>{detail.variantID.color}</Text></Text>
               <Text style={styles.productDetail}>Số lượng: <Text style={styles.attrValue}>{detail.quantity}</Text></Text>
@@ -421,10 +418,10 @@ const OrderDetail = () => {
         </View>
       </View>
       <TouchableOpacity style={styles.contactBtn} onPress={() => {
-        setModalType('info');
-        setModalTitle('Liên hệ shop');
-        setModalMessage('SĐT: 0123456789');
-        setModalVisible(true);
+          setModalType('info');
+          setModalTitle('Liên hệ shop');
+          setModalMessage(`Bạn có muốn gọi đến số: ${shopPhoneNumber} không?`);
+          setModalVisible(true);
       }}>
         <Ionicons name="call" size={20} color="#fff" style={{ marginRight: 7 }} />
         <Text style={styles.contactText}>Liên hệ shop</Text>
@@ -615,11 +612,16 @@ const OrderDetail = () => {
         </View>
       </Modal>
       <CustomModal
-        isVisible={modalVisible}
+       isVisible={modalVisible}
         type={modalType}
         title={modalTitle}
         message={modalMessage}
         onClose={() => setModalVisible(false)}
+        onConfirm={() => {
+          Linking.openURL(`tel:${shopPhoneNumber}`);
+          setModalVisible(false);
+        }}
+        showConfirmButton={true}
       />
       <View style={{ height: 40 }} />
     </ScrollView>
@@ -686,11 +688,10 @@ const styles = StyleSheet.create({
   icon: {
     marginBottom: 15,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
+  title1: {
+   color : "#fff",
+   fontSize : 20,
+   fontWeight : "condensedBold"
   },
   message: {
     fontSize: 16,

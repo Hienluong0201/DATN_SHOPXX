@@ -4,8 +4,6 @@ import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '../../store/useAuth';
 import { useNavigation } from '@react-navigation/native';
-
-// Dùng hình minh họa "chưa đăng nhập"
 const emptyImg = require('../../assets/images/laughing.png');
 
 const ProfileScreen = () => {
@@ -94,14 +92,14 @@ const ProfileScreen = () => {
           <Text style={styles.menuText}>Đơn hàng của bạn</Text>
           <Ionicons name="chevron-forward" size={20} color="#8B5A2B" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/settings')}>
+        {/* <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/settings')}>
           <MaterialIcons name="settings" size={24} color="#8B5A2B" />
           <Text style={styles.menuText}>Cài đặt</Text>
           <Ionicons name="chevron-forward" size={20} color="#8B5A2B" />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/help')}>
-          <MaterialIcons name="help" size={24} color="#8B5A2B" />
-          <Text style={styles.menuText}>Trợ giúp</Text>
+          <MaterialIcons name="visibility" size={24} color="#8B5A2B" />
+          <Text style={styles.menuText}>Đổi mật khẩu</Text>
           <Ionicons name="chevron-forward" size={20} color="#8B5A2B" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/privacy')}>
@@ -114,11 +112,11 @@ const ProfileScreen = () => {
           <Text style={styles.menuText}>Địa chỉ</Text>
           <Ionicons name="chevron-forward" size={20} color="#8B5A2B" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/contact')}>
+        {/* <TouchableOpacity style={styles.menuItem} onPress={() => navigateTo('/contact')}>
           <MaterialIcons name="contact-mail" size={24} color="#8B5A2B" />
           <Text style={styles.menuText}>Liên hệ</Text>
           <Ionicons name="chevron-forward" size={20} color="#8B5A2B" />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         <TouchableOpacity
           style={styles.menuItem}
           onPress={async () => {
