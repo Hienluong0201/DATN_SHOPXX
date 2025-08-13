@@ -34,6 +34,20 @@ export default function RootLayout() {
     };
     checkLoginStatus();
   }, []);
+useEffect(() => {
+    const sub1 = Notifications.addNotificationReceivedListener((n) => {
+      console.log("🔔 received in foreground:", JSON.stringify(n, null, 2));
+    });
+
+    const sub2 = Notifications.addNotificationResponseReceivedListener((r) => {
+      console.log("👉 tapped notification:", JSON.stringify(r, null, 2));
+    });
+
+    return () => {
+      Notifications.removeNotificationSubscription(sub1);
+      Notifications.removeNotificationSubscription(sub2);
+    };
+  }, []);
 
   // Đăng ký token khi đã có user._id
   useEffect(() => {

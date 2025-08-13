@@ -8,6 +8,7 @@ import Constants from 'expo-constants';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
+    shouldShowAlert: true,        
     shouldShowBanner: true,
     shouldShowList: true,
     shouldPlaySound: true,
@@ -96,7 +97,7 @@ export function useRegisterPushToken(userID?: string) {
         const res = await AxiosInstance().post('/api/push/register', {
           userID, token, platform: 'expo',
         });
-        console.log('[push] /api/push/register =>', res?.status, res?.data ?? '');
+        console.log('[push] /api/push/register =>', res?.status, res ?? '');
       } catch (e: any) {
         console.log('[push] register token FAILED:', e?.response?.data || e?.message || e);
         return;
@@ -105,7 +106,7 @@ export function useRegisterPushToken(userID?: string) {
       // 5) Xác nhận server đã lưu
       try {
         const list = await AxiosInstance().get(`/api/push/list/${userID}`);
-        console.log('[push] /api/push/list =>', list?.status, list?.data);
+        console.log('[push] /api/push/list =>', list?.status, list ?? "");
       } catch (e: any) {
         console.log('[push] get list FAILED:', e?.response?.data || e?.message || e);
       }
