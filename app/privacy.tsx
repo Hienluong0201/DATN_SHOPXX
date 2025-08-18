@@ -233,21 +233,7 @@ const VoucherScreen = () => {
             }
             scrollEnabled={false}
           />
-          {/* ALL VOUCHER API */}
-        <Text style={styles.sectionTitle}>🔥 Tất cả voucher</Text>
-        <FlatList
-          data={vouchers}
-          renderItem={renderVoucher}
-          keyExtractor={item => item._id}
-          contentContainerStyle={{ paddingBottom: 10 }}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="gift-outline" size={62} color="#bdbdbd" />
-              <Text style={{ color: "#888", marginTop: 8, fontSize: 15 }}>Không có voucher nào</Text>
-            </View>
-          }
-          scrollEnabled={false}
-        />
+         
         </ScrollView>
       )}
     </View>

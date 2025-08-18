@@ -77,7 +77,7 @@ const [cartLoading, setCartLoading] = React.useState<string | null>(null);
   return (
     <Animated.View style={containerStyle}>
       <View style={styles.categoryHeader}>
-        <Text style={styles.sectionTitle}>Tất cả sản phẩm</Text>
+        <Text style={styles.sectionTitle}>Sản phẩm nổi bật</Text>
       </View>
       <View style={styles.gridContainer}>
         {allProducts.map((product, index) => {

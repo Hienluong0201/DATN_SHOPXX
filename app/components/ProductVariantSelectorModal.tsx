@@ -7,6 +7,7 @@ import {
   Image,
   StyleSheet,
   ScrollView,
+  TextInput,
 } from 'react-native';
 
 interface Variant {
@@ -33,7 +34,9 @@ const ProductVariantSelectorModal: React.FC<Props> = ({
 }) => {
   const [selectedColor, setSelectedColor] = React.useState<string | null>(null);
   const [selectedSize, setSelectedSize] = React.useState<string | null>(null);
+  // quantity: số thực để submit; quantityInput: chuỗi hiển thị để người dùng gõ
   const [quantity, setQuantity] = React.useState<number>(1);
+  const [quantityInput, setQuantityInput] = React.useState<string>('1');
   const [imageError, setImageError] = React.useState(false);
 
   const colors = Array.from(new Set(variants.map(v => v.color)));
@@ -56,21 +59,24 @@ const ProductVariantSelectorModal: React.FC<Props> = ({
 
   const handleConfirm = () => {
     const variantId = getSelectedVariantId();
-    if (variantId) {
+    if (variantId && quantity >= 1) {
       onConfirm(variantId, quantity);
       onClose();
     }
   };
 
+  // Reset khi mở modal
   React.useEffect(() => {
-    // Reset khi mở modal hoặc đổi màu/size
     setSelectedColor(null);
     setSelectedSize(null);
     setQuantity(1);
+    setQuantityInput('1');
   }, [visible]);
 
+  // Khi đổi màu/size thì reset lại số lượng
   React.useEffect(() => {
     setQuantity(1);
+    setQuantityInput('1');
   }, [selectedColor, selectedSize]);
 
   if (!product) return null;
@@ -151,18 +157,54 @@ const ProductVariantSelectorModal: React.FC<Props> = ({
             <View style={styles.quantityContainer}>
               <Text style={styles.sectionTitle}>Số lượng</Text>
               <View style={styles.quantityControl}>
+                {/* Nút - */}
                 <TouchableOpacity
-                  onPress={() => setQuantity(q => Math.max(1, q - 1))}
+                  onPress={() => {
+                    const next = Math.max(1, (Number.isFinite(quantity) ? quantity : 1) - 1);
+                    setQuantity(next);
+                    setQuantityInput(String(next));
+                  }}
                   style={[styles.quantityBtn, quantity <= 1 && styles.quantityBtnDisabled]}
                   disabled={quantity <= 1}
                 >
                   <Text style={styles.quantityBtnText}>-</Text>
                 </TouchableOpacity>
-                <Text style={styles.quantityText}>{quantity}</Text>
+
+                {/* Ô nhập số lượng */}
+                <TextInput
+                  style={styles.quantityText}
+                  value={quantityInput}
+                  onChangeText={(text) => {
+                    const onlyDigits = text.replace(/[^0-9]/g, '');
+                    if (onlyDigits === '') {
+                      setQuantityInput('');
+                      setQuantity(0);
+                      return;
+                    }
+
+                    let num = parseInt(onlyDigits, 10);
+                    if (isNaN(num)) num = 0;
+
+                    // Chặn ngay không cho vượt tồn kho
+                    if (selectedVariant && num > selectedVariant.stock) {
+                      num = selectedVariant.stock;
+                    }
+
+                    setQuantityInput(String(num));
+                    setQuantity(num);
+                  }}
+                  keyboardType="number-pad"
+                  inputMode="numeric"
+                  maxLength={6}
+                />
+
+                {/* Nút + */}
                 <TouchableOpacity
-                  onPress={() =>
-                    setQuantity(q => Math.min(selectedVariant.stock, q + 1))
-                  }
+                  onPress={() => {
+                    const next = Math.min(selectedVariant.stock, (Number.isFinite(quantity) ? quantity : 0) + 1);
+                    setQuantity(next);
+                    setQuantityInput(String(next));
+                  }}
                   style={[
                     styles.quantityBtn,
                     quantity >= selectedVariant.stock && styles.quantityBtnDisabled,
@@ -171,6 +213,7 @@ const ProductVariantSelectorModal: React.FC<Props> = ({
                 >
                   <Text style={styles.quantityBtnText}>+</Text>
                 </TouchableOpacity>
+
                 <Text style={styles.stockText}>/ {selectedVariant.stock} còn lại</Text>
               </View>
             </View>
@@ -180,10 +223,10 @@ const ProductVariantSelectorModal: React.FC<Props> = ({
           <TouchableOpacity
             style={[
               styles.confirmButton,
-              !(selectedColor && selectedSize && selectedVariant && quantity > 0) && { backgroundColor: '#ccc' },
+              !(selectedColor && selectedSize && selectedVariant && quantity >= 1) && { backgroundColor: '#ccc' },
             ]}
             onPress={handleConfirm}
-            disabled={!(selectedColor && selectedSize && selectedVariant && quantity > 0)}
+            disabled={!(selectedColor && selectedSize && selectedVariant && quantity >= 1)}
           >
             <Text style={styles.confirmText}>Thêm vào giỏ hàng</Text>
           </TouchableOpacity>
@@ -250,6 +293,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: '#f0f0f0',
     marginRight: 10,
+    height: 40, // chiều cao cố định
+ 
   },
   variantButtonSelected: {
     backgroundColor: '#8B4513',
@@ -285,8 +330,11 @@ const styles = StyleSheet.create({
   },
   quantityText: {
     fontSize: 16,
-    width: 32,
+    width: 64,
     textAlign: 'center',
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderColor: '#ddd',
   },
   stockText: {
     fontSize: 12,

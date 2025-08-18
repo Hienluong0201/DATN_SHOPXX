@@ -13,6 +13,7 @@ import * as ImagePicker from 'expo-image-picker';
 import Modal from 'react-native-modal';
 import { Ionicons as CustomModalIonicons } from '@expo/vector-icons';
 import { Linking } from 'react-native';
+
 const PRIMARY = "#e4633b";
 const cancelReasonsList = [
   'Đặt nhầm sản phẩm',
@@ -22,7 +23,8 @@ const cancelReasonsList = [
   'Thời gian giao lâu',
   'Khác',
 ];
-const getPaymentLabel = (method: any) => {
+
+const getPaymentLabel = (method) => {
   if (!method) return 'Không rõ';
   const lower = method.toLowerCase();
   if (lower.includes('credit')) return 'Thẻ tín dụng';
@@ -33,7 +35,7 @@ const getPaymentLabel = (method: any) => {
   if (lower.includes('cash')) return 'Tiền mặt';
   return method;
 };
-const getPaymentIcon = (method : any) => {
+const getPaymentIcon = (method) => {
   if (!method) return 'help-circle-outline';
   const lower = method.toLowerCase();
   if (lower.includes('credit')) return 'card-outline';
@@ -76,7 +78,7 @@ const getStatusProps = (status) => {
   }
 };
 
-// CustomModal Component
+// CustomModal
 const CustomModal = ({
   isVisible,
   type,
@@ -93,7 +95,7 @@ const CustomModal = ({
     <Modal isVisible={isVisible} onBackdropPress={onClose} animationIn="zoomIn" animationOut="zoomOut">
       <View style={styles.modalContainer}>
         <CustomModalIonicons name={iconName} size={50} color={iconColor} style={styles.icon} />
-        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.title1Modal}>{title}</Text>
         <Text style={styles.message}>{message}</Text>
         <View style={styles.buttonContainer}>
           {showConfirmButton && (
@@ -109,15 +111,41 @@ const CustomModal = ({
     </Modal>
   );
 };
+const CustomCancelModal = ({
+  isVisible,
+  type,
+  title,
+  message,
+  onClose,
+}) => {
+  const iconName = type === 'success' ? 'checkmark-circle' : 'close-circle';
+  const iconColor = type === 'success' ? '#28a745' : '#dc3545';
 
+  return (
+    <Modal isVisible={isVisible} onBackdropPress={onClose} animationIn="zoomIn" animationOut="zoomOut">
+      <View style={styles.modalContainer}>
+        <CustomModalIonicons name={iconName} size={50} color={iconColor} style={styles.icon} />
+        <Text style={styles.title1Modal}>{title}</Text>
+        <Text style={styles.message}>{message}</Text>
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={[styles.button, styles.closeButton]} onPress={onClose}>
+            <Text style={styles.buttonText}>Đóng</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
 const OrderDetail = () => {
   const { orderId } = useLocalSearchParams();
-  const { getProductById } = useProducts();
+  const { getProductById, getProductOrFetch } = useProducts();
   const { user } = useAuth();
+
   const [orderDetails, setOrderDetails] = useState([]);
   const [orderInfo, setOrderInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
   const [reviewImages, setReviewImages] = useState([]);
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -128,28 +156,54 @@ const OrderDetail = () => {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [sendingReview, setSendingReview] = useState(false);
-  // State cho CustomModal
+
+  // CustomModal state
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState('success');
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
   const [shopPhoneNumber, setShopPhoneNumber] = useState('0896238002');
-  useEffect(() => {
-    const fetchOrderDetails = async () => {
-      setLoading(true);
-      try {
-        const [detailsRes, orderRes] = await Promise.all([
-          AxiosInstance().get(`/orderdetail/order/${orderId}`),
-          AxiosInstance().get(`/order/${orderId}`)
-        ]);
-        const enrichedDetails = (Array.isArray(detailsRes) ? detailsRes : []).map(detail => {
+
+  // CustomCancelModal state
+  const [cancelModalResultVisible, setCancelModalResultVisible] = useState(false);
+  const [cancelModalType, setCancelModalType] = useState('success');
+  const [cancelModalTitle, setCancelModalTitle] = useState('');
+  const [cancelModalMessage, setCancelModalMessage] = useState('');
+
+
+// 2) Thay toàn bộ useEffect cũ bằng đoạn này:
+useEffect(() => {
+  const fetchOrderDetails = async () => {
+    setLoading(true);
+    try {
+      const [detailsRes, orderRes] = await Promise.all([
+        AxiosInstance().get(`/orderdetail/order/${orderId}`),
+        AxiosInstance().get(`/order/${orderId}`)
+      ]);
+
+      // ✅ Ưu tiên lấy từ cache 50 (đã prefetch); nếu thiếu thì fetch theo id
+      const enrichedDetails = await Promise.all(
+        (Array.isArray(detailsRes) ? detailsRes : []).map(async (detail) => {
           const productId = detail?.variantID?.productID;
-          const product = productId ? getProductById(productId) : {};
-          let images = [];
+
+          // 1) thử lấy từ cache/UI trước
+          let product = productId ? getProductById(productId) : undefined;
+
+          // 2) nếu chưa có → gọi API theo id và nhét vào cache
+          if (!product && productId) {
+            product = await getProductOrFetch(productId);
+            console.log("🔄 Fetched by id (not in cache/UI):", productId, !!product);
+          } else {
+            console.log("✅ From cache/UI:", productId, !!product);
+          }
+
+          // chuẩn hoá ảnh
+          let images: string[] = [];
           if (Array.isArray(product?.Images) && product.Images.length > 0) images = product.Images;
           else if (Array.isArray(product?.images) && product.images.length > 0) images = product.images;
           else if (product?.Image) images = [product.Image];
           else images = ['https://via.placeholder.com/80'];
+
           return {
             ...detail,
             Name: product?.Name || 'Sản phẩm không xác định',
@@ -157,61 +211,67 @@ const OrderDetail = () => {
             Brand: product?.Brand || "Không xác định",
             Category: product?.CategoryID || "",
           };
-        });
-        setOrderDetails(enrichedDetails);
-        setOrderInfo(orderRes);
-        setError(null);
-      } catch (err) {
-        setError('Không thể tải chi tiết đơn hàng. Vui lòng thử lại sau.');
-        setOrderDetails([]);
-        setOrderInfo(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-    if (orderId) fetchOrderDetails();
-    else {
-      setError('Không tìm thấy mã đơn hàng');
+        })
+      );
+
+      // Log kiểm tra xem enrich được bao nhiêu sản phẩm hợp lệ
+      const foundCount = enrichedDetails.filter(d => d.Name !== 'Sản phẩm không xác định').length;
+      console.log(`📦 Enriched from cache/fetch: ${foundCount}/${enrichedDetails.length}`);
+
+      setOrderDetails(enrichedDetails);
+      setOrderInfo(orderRes);
+      setError(null);
+    } catch (err) {
+      setError('Không thể tải chi tiết đơn hàng. Vui lòng thử lại sau.');
+      setOrderDetails([]);
+      setOrderInfo(null);
+    } finally {
       setLoading(false);
     }
-  }, [orderId, getProductById]);
+  };
 
+  if (orderId) fetchOrderDetails();
+  else {
+    setError('Không tìm thấy mã đơn hàng');
+    setLoading(false);
+  }
+}, [orderId, getProductById, getProductOrFetch]); // ✅ thêm getProductOrFetch vào deps
   const openCancelModal = () => {
     setCancelModalVisible(true);
     setCancelReason('');
     setOtherReason('');
   };
 
-  const submitCancelOrder = async () => {
-    if (!cancelReason || (cancelReason === 'Khác' && !otherReason.trim())) {
-      setModalType('error');
-      setModalTitle('Lỗi');
-      setModalMessage('Vui lòng chọn hoặc nhập lý do huỷ!');
-      setModalVisible(true);
-      return;
-    }
-    setSubmittingCancel(true);
-    try {
-      const reasonText = cancelReason === 'Khác' ? otherReason.trim() : cancelReason;
-      await AxiosInstance().put(`/order/${orderInfo._id}`, {
-        orderStatus: "cancelled",
-        cancelReason: reasonText
-      });
-      setModalType('success');
-      setModalTitle('Thông báo');
-      setModalMessage('Đã hủy đơn hàng thành công');
-      setModalVisible(true);
-      setOrderInfo(prev => ({ ...prev, orderStatus: 'cancelled' }));
-      setCancelModalVisible(false);
-    } catch (error) {
-      setModalType('error');
-      setModalTitle('Lỗi');
-      setModalMessage(error?.response?.data?.message || 'Không thể hủy đơn hàng.');
-      setModalVisible(true);
-    } finally {
-      setSubmittingCancel(false);
-    }
-  };
+ const submitCancelOrder = async () => {
+  if (!cancelReason || (cancelReason === 'Khác' && !otherReason.trim())) {
+    setCancelModalType('error');
+    setCancelModalTitle('Lỗi');
+    setCancelModalMessage('Vui lòng chọn hoặc nhập lý do huỷ!');
+    setCancelModalResultVisible(true);
+    return;
+  }
+  setSubmittingCancel(true);
+  try {
+    const reasonText = cancelReason === 'Khác' ? otherReason.trim() : cancelReason;
+    await AxiosInstance().put(`/order/${orderInfo._id}`, {
+      orderStatus: "cancelled",
+      cancelReason: reasonText
+    });
+    setCancelModalType('success');
+    setCancelModalTitle('Thông báo');
+    setCancelModalMessage('Đã hủy đơn hàng thành công');
+    setCancelModalResultVisible(true);
+    setOrderInfo(prev => ({ ...prev, orderStatus: 'cancelled' }));
+    setCancelModalVisible(false);
+  } catch (error) {
+    setCancelModalType('error');
+    setCancelModalTitle('Lỗi');
+    setCancelModalMessage(error?.response?.data?.message || 'Không thể hủy đơn hàng.');
+    setCancelModalResultVisible(true);
+  } finally {
+    setSubmittingCancel(false);
+  }
+};
 
   const openReviewModal = (product) => {
     setReviewProduct(product);
@@ -222,7 +282,6 @@ const OrderDetail = () => {
 
   const handleSendReview = async () => {
     const userID = user?._id || orderInfo?.userID;
-
     if (!userID || !reviewProduct) {
       setModalType('error');
       setModalTitle('Lỗi');
@@ -230,7 +289,6 @@ const OrderDetail = () => {
       setModalVisible(true);
       return;
     }
-
     if (!reviewComment.trim()) {
       setModalType('error');
       setModalTitle('Lỗi');
@@ -240,7 +298,6 @@ const OrderDetail = () => {
     }
 
     setSendingReview(true);
-
     try {
       const formData = new FormData();
       formData.append('userID', userID);
@@ -257,20 +314,13 @@ const OrderDetail = () => {
           : ext === 'png'
           ? 'image/png'
           : 'application/octet-stream';
-
-        formData.append('images', {
-          uri,
-          name: filename,
-          type: mimeType,
-        });
+        formData.append('images', { uri, name: filename, type: mimeType });
       });
 
       const res = await fetch('https://datn-sever.onrender.com/review', {
         method: 'POST',
         body: formData,
-        headers: {
-          Accept: 'application/json',
-        },
+        headers: { Accept: 'application/json' },
       });
 
       if (!res.ok) {
@@ -286,17 +336,25 @@ const OrderDetail = () => {
       setReviewImages([]);
       setReviewComment('');
     } catch (err) {
-      console.error('❌ Lỗi gửi review:', err);
       setModalType('error');
       setModalTitle('Lỗi');
       setModalMessage(err?.message || 'Không gửi được đánh giá');
       setModalVisible(true);
     }
-
     setSendingReview(false);
   };
 
   const goBack = () => router.back();
+
+  // ✅ Hàm điều hướng sang ProductDetail
+  const goToProductDetail = (productId) => {
+    if (!productId) return;
+    router.push({
+      pathname: './productDetail',   // hoặc '/productDetail' nếu file ở app/productDetail.tsx
+      params: { productId: String(productId) },
+    });
+  };
+
   const calcTotal = () => orderDetails.reduce((sum, d) => sum + (d.price * d.quantity), 0);
 
   if (loading) {
@@ -330,6 +388,7 @@ const OrderDetail = () => {
         <Text style={styles.title1}>Chi tiết đơn hàng</Text>
         <View style={{ width: 24 }} />
       </View>
+
       <View style={styles.statusCard}>
         <MaterialCommunityIcons name={statusProps.icon} size={30} color={statusProps.color} style={{ marginRight: 12 }} />
         <View>
@@ -337,47 +396,65 @@ const OrderDetail = () => {
           <Text style={{ color: "#888", fontSize: 13, marginTop: 3 }}>Ngày đặt: {formatDate(orderInfo.createdAt)}</Text>
         </View>
       </View>
+
       <View style={styles.infoCard}>
         <Text style={styles.infoLabel}>Khách nhận hàng</Text>
         <Text style={styles.infoValue}><Ionicons name="person" size={16} /> {orderInfo.name} | {orderInfo.sdt}</Text>
         <Text style={styles.infoValue}><Ionicons name="location" size={16} /> {orderInfo.shippingAddress}</Text>
         <Text style={styles.infoLabel}>Phương thức thanh toán</Text>
-        <Text style={styles.infoValue}>
-          {getPaymentLabel(orderInfo.paymentID?.paymentMethod)}
-        </Text>
+        <Text style={styles.infoValue}>{getPaymentLabel(orderInfo.paymentID?.paymentMethod)}</Text>
       </View>
+
       <View style={styles.productList}>
         <Text style={styles.sectionTitle}>Sản phẩm ({orderDetails.length})</Text>
+
         {orderDetails.map((detail) => (
           <View key={detail._id} style={styles.productCard}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginRight: 8, flex: 0.8 }}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginRight: 8, flex: 0.8 }}
+            >
               {detail.Images.map((img, idx) => (
                 <Image key={idx} source={{ uri: img }} style={styles.productImage} />
               ))}
             </ScrollView>
-            <View style={styles.productInfo}>
-              <Text style={styles.productName}>{detail.Name}</Text>   
-              <Text style={styles.productDetail}>Kích thước: <Text style={styles.attrValue}>{detail.variantID.size}</Text></Text>
-              <Text style={styles.productDetail}>Màu sắc: <Text style={styles.attrValue}>{detail.variantID.color}</Text></Text>
-              <Text style={styles.productDetail}>Số lượng: <Text style={styles.attrValue}>{detail.quantity}</Text></Text>
-              <Text style={styles.productDetail}>Giá: <Text style={styles.productPrice}>{formatPrice(detail.price)}</Text></Text>
+
+            {/* ✅ Bấm vào phần thông tin sẽ mở ProductDetail */}
+            <TouchableOpacity
+              style={styles.productInfo}
+              activeOpacity={0.7}
+              onPress={() => goToProductDetail(detail?.variantID?.productID)}
+            >
+              <Text style={styles.productName} numberOfLines={2}>
+                {detail.Name}
+              </Text>
+              <Text style={styles.productDetail}>
+                Kích thước: <Text style={styles.attrValue}>{detail?.variantID?.size}</Text>
+              </Text>
+              <Text style={styles.productDetail}>
+                Màu sắc: <Text style={styles.attrValue}>{detail?.variantID?.color}</Text>
+              </Text>
+              <Text style={styles.productDetail}>
+                Số lượng: <Text style={styles.attrValue}>{detail.quantity}</Text>
+              </Text>
+              <Text style={styles.productDetail}>
+                Giá: <Text style={styles.productPrice}>{formatPrice(detail.price)}</Text>
+              </Text>
+
               {orderInfo.orderStatus === 'delivered' && (
                 <TouchableOpacity
-                  style={{
-                    backgroundColor: '#f7c873', borderRadius: 10, paddingHorizontal: 18, paddingVertical: 7,
-                    marginTop: 6, alignSelf: 'flex-start'
-                  }}
+                  style={styles.rateBtn}
                   onPress={() => openReviewModal(detail)}
                 >
-                  <Text style={{ color: '#8B5A2B', fontWeight: 'bold', fontSize: 15 }}>
-                    Đánh giá
-                  </Text>
+                  <Text style={styles.rateBtnText}>Đánh giá</Text>
                 </TouchableOpacity>
               )}
-            </View>
+            </TouchableOpacity>
           </View>
         ))}
       </View>
+
       <View style={styles.summaryCard}>
         <Text style={styles.sectionTitle}>Tổng cộng</Text>
         <View style={styles.summaryRow}>
@@ -412,20 +489,23 @@ const OrderDetail = () => {
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.label}>Thanh toán:</Text>
-          <Text style={styles.value}>
-            {getPaymentLabel(orderInfo.paymentID?.paymentMethod)}
-          </Text>
+          <Text style={styles.value}>{getPaymentLabel(orderInfo.paymentID?.paymentMethod)}</Text>
         </View>
       </View>
-      <TouchableOpacity style={styles.contactBtn} onPress={() => {
+
+      <TouchableOpacity
+        style={styles.contactBtn}
+        onPress={() => {
           setModalType('info');
           setModalTitle('Liên hệ shop');
           setModalMessage(`Bạn có muốn gọi đến số: ${shopPhoneNumber} không?`);
           setModalVisible(true);
-      }}>
+        }}
+      >
         <Ionicons name="call" size={20} color="#fff" style={{ marginRight: 7 }} />
         <Text style={styles.contactText}>Liên hệ shop</Text>
       </TouchableOpacity>
+
       {orderInfo.orderStatus === 'pending' && (
         <TouchableOpacity
           style={[styles.contactBtn, { backgroundColor: "#D32F2F", marginBottom: 10 }]}
@@ -435,13 +515,15 @@ const OrderDetail = () => {
           <Text style={styles.contactText}>Huỷ đơn hàng</Text>
         </TouchableOpacity>
       )}
+
+      {/* Cancel modal */}
       <Modal
         visible={cancelModalVisible}
         transparent
         animationType="slide"
         onRequestClose={() => setCancelModalVisible(false)}
       >
-        <View style={{
+       <View style={{
           flex: 1, backgroundColor: 'rgba(0,0,0,0.25)',
           justifyContent: 'center', alignItems: 'center'
         }}>
@@ -509,6 +591,8 @@ const OrderDetail = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Review modal */}
       <Modal
         visible={reviewModalVisible}
         transparent
@@ -611,8 +695,9 @@ const OrderDetail = () => {
           </View>
         </View>
       </Modal>
+
       <CustomModal
-       isVisible={modalVisible}
+        isVisible={modalVisible}
         type={modalType}
         title={modalTitle}
         message={modalMessage}
@@ -623,6 +708,13 @@ const OrderDetail = () => {
         }}
         showConfirmButton={true}
       />
+      <CustomCancelModal
+      isVisible={cancelModalResultVisible}
+      type={cancelModalType}
+      title={cancelModalTitle}
+      message={cancelModalMessage}
+      onClose={() => setCancelModalResultVisible(false)}
+    />
       <View style={{ height: 40 }} />
     </ScrollView>
   );
@@ -636,7 +728,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   backButton: { padding: 4 },
-  title: { fontSize: 21, fontWeight: 'bold', color: '#fff', flex: 1, textAlign: 'center' },
+  title1: { color: "#fff", fontSize: 20, fontWeight: "bold" },
   statusCard: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#fff', marginHorizontal: 14, marginTop: 14, borderRadius: 14, padding: 14, elevation: 2
@@ -648,6 +740,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#e4633b', marginBottom: 6 },
   infoValue: { fontSize: 15, color: '#222', marginBottom: 4, marginLeft: 4 },
   infoLabel: { fontSize: 14, fontWeight: '700', color: '#888', marginBottom: 3, marginTop: 6 },
+
   productList: { marginTop: 18, marginHorizontal: 10 },
   productCard: {
     flexDirection: 'row', backgroundColor: '#fff', borderRadius: 13, marginBottom: 14,
@@ -659,17 +752,25 @@ const styles = StyleSheet.create({
   productDetail: { fontSize: 14, color: '#555', marginTop: 2 },
   productPrice: { color: '#e4633b', fontWeight: 'bold' },
   attrValue: { color: '#111', fontWeight: '600' },
+  rateBtn: {
+    backgroundColor: '#f7c873', borderRadius: 10, paddingHorizontal: 18, paddingVertical: 7,
+    marginTop: 6, alignSelf: 'flex-start'
+  },
+  rateBtnText: { color: '#8B5A2B', fontWeight: 'bold', fontSize: 15 },
+
   summaryCard: {
     backgroundColor: '#fff', borderRadius: 14, padding: 15, marginHorizontal: 14, marginTop: 16, elevation: 2,
   },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
   label: { color: '#444', fontSize: 14 },
   value: { color: '#333', fontSize: 14, fontWeight: 'bold' },
+
   contactBtn: {
     backgroundColor: "#e4633b", marginHorizontal: 40, marginTop: 20, flexDirection: 'row', alignItems: 'center',
     justifyContent: 'center', borderRadius: 20, paddingVertical: 12, elevation: 3
   },
   contactText: { color: "#fff", fontSize: 16, fontWeight: 'bold' },
+
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FA' },
   loadingText: { marginTop: 10, fontSize: 16, color: '#666' },
   errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FA' },
@@ -678,50 +779,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#e4633b', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 20, marginTop: 14,
   },
   retryButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
-  modalContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 20,
-    alignItems: 'center',
-    marginHorizontal: 20,
-  },
-  icon: {
-    marginBottom: 15,
-  },
-  title1: {
-   color : "#fff",
-   fontSize : 20,
-   fontWeight : "condensedBold"
-  },
-  message: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-  },
-  button: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    minWidth: 100,
-    alignItems: 'center',
-  },
-  confirmButton: {
-    backgroundColor: '#28a745',
-  },
-  closeButton: {
-    backgroundColor: '#dc3545',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+
+  // CustomModal styles
+  modalContainer: { backgroundColor: '#fff', borderRadius: 15, padding: 20, alignItems: 'center', marginHorizontal: 20 },
+  icon: { marginBottom: 15 },
+  title1Modal: { fontSize: 18, fontWeight: 'bold', color: '#222', marginBottom: 8 },
+  message: { fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 20 },
+  buttonContainer: { flexDirection: 'row', justifyContent: 'space-around', width: '100%' },
+  button: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, minWidth: 100, alignItems: 'center' },
+  confirmButton: { backgroundColor: '#28a745' },
+  closeButton: { backgroundColor: '#dc3545' },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });
 
 export default OrderDetail;

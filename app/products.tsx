@@ -20,7 +20,7 @@ const ProductCard = ({ product, onPress }) => (
     <Text style={styles.productName}>{product.Name || 'Sản phẩm không tên'}</Text>
     <View style={styles.ratingContainer}>
       <MaterialIcons name="star" size={16} color="#FFD700" />
-      <Text style={styles.ratingText}>{product.Rating || '4.0'}</Text>
+      <Text style={styles.ratingText}>{product.Rating || '0.0'}</Text>
     </View>
     <Text style={styles.productPrice}>{(product.Price || 0).toLocaleString()}đ</Text>
   </TouchableOpacity>
@@ -72,6 +72,11 @@ const Products = () => {
   const tabScrollRef = useRef(null);
   const tabLayouts = useRef([]); // [{x, width}]
 
+  // stast giá mix max 
+  const [minprice, setprice] = useState('');
+  const [maxprice , setmaxprice] = useState('');
+  const [ appliedRange, setAppliedRange] = useState({})
+
   // Danh sách tất cả category cho thanh tab ngang
   const categoryList = useMemo(
     () => [{ CategoryID: 'all', Name: 'Tất cả' }, ...(categories || [])],
@@ -88,18 +93,28 @@ const Products = () => {
   // Lấy đúng danh mục theo index
   const selectedCategory = categoryList[selectedCategoryIndex] || categoryList[0];
 
-  // Danh sách sản phẩm theo danh mục
-  const filteredProducts = useMemo(() => {
-  const list = selectedCategory.CategoryID === 'all'
+  // Danh sách sản phẩm theo danh mục + tìm kiếm + lọc giá
+const filteredProducts = useMemo(() => {
+  let list = selectedCategory.CategoryID === 'all'
     ? products
     : getProductsByCategory(selectedCategory.CategoryID);
+
+  // Lọc theo từ khóa
   const lowerSearch = searchQuery.trim().toLowerCase();
-  if (!lowerSearch) return list;
-  return list.filter(
-    prod => prod?.Name?.toLowerCase().includes(lowerSearch)
-    // Bạn muốn mở rộng tìm thêm field nào nữa thì thêm OR ở đây
-  );
-}, [selectedCategory, products, getProductsByCategory, searchQuery]);
+  if (lowerSearch) {
+    list = list.filter(prod => prod?.Name?.toLowerCase().includes(lowerSearch));
+  }
+
+  // Lọc theo giá
+  const min = Number(minprice) || 0; // nếu rỗng thì = 0
+  const max = Number(maxprice) || Infinity; // nếu rỗng thì = vô cực
+  list = list.filter(prod => {
+    const price = Number(prod?.Price) || 0;
+    return price >= min && price <= max;
+  });
+
+  return list;
+}, [selectedCategory, products, getProductsByCategory, searchQuery, minprice, maxprice]);
 
   // Fetch categories 1 lần khi vào trang
   useEffect(() => {
@@ -226,7 +241,7 @@ const Products = () => {
           </View>
         }
         ListHeaderComponent={
-          <View>
+          <View style={{paddingBottom: 10 , backgroundColor: '#fff'}}>
             {/* Header với nút back */}
             <View style={styles.header}>
               <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
@@ -243,6 +258,27 @@ const Products = () => {
                 returnKeyType="search"
                 clearButtonMode="while-editing"
               />
+            </View>
+            {/* Hiển thị giá min max */}
+            <View style={{paddingHorizontal: 10, marginTop: 10}}>
+            <Text style={{ fontSize : 15 , fontWeight: 'bold', color: '#000' }}>Lọc theo giá (VND)</Text>
+              <View style={{flexDirection : 'row',marginTop: 5}}>
+                <TextInput
+                  style={{flex: 1, borderWidth: 1, borderColor: '#ccc', borderRadius: 5, paddingHorizontal: 10, marginRight: 5}}
+                  placeholder="Giá tối thiểu"
+                  keyboardType="numeric"
+                  value={minprice}
+                  onChangeText={text => setprice(text)}
+                />
+                <TextInput
+                  style={{flex: 1, borderWidth: 1, borderColor: '#ccc', borderRadius: 5, paddingHorizontal: 10}}
+                  placeholder="Giá tối đa"
+                  keyboardType="numeric"
+                  value={maxprice}
+                  onChangeText={text => setmaxprice(text)}
+                />
+           
+              </View>
             </View>
             {/* Thanh tab danh mục */}
             <ScrollView

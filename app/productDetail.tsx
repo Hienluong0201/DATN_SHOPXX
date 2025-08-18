@@ -202,6 +202,7 @@ const loadData = useCallback(async () => {
     Videos: videos,
     Rating: baseProduct.averageRating || 0,
     Status: typeof baseProduct.status === "boolean" ? baseProduct.status : true,
+    CategoryID: baseProduct.categoryID || "",
   });
 
   setVariants(fetchedVariants || []);
@@ -266,29 +267,45 @@ const averageRating = calcAverageRating(reviews);
   }, [product, selectedVariant, quantity, user]);
 
   // Mua ngay
-  const handleBuyNow = useCallback(async () => {
-    if (!user || !user._id) {
-      showModal('warning', 'Thông báo', 'Bạn cần đăng nhập để mua ngay!');
-      return;
-    }
-    if (product && selectedVariant) {
-      try {
-        await addToCartAPI(user._id, selectedVariant._id, quantity);
-        showModal('success', 'Thành công', 'Đã thêm vào giỏ hàng, chuyển đến giỏ hàng...', false, () => {
-          router.push('/home/cart');
-        });
-        // Tự động chuyển sau 1 giây
-        setTimeout(() => {
-          setModalVisible(false);
-          router.push('/home/cart');
-        }, 1000);
-      } catch (error) {
-        showModal('error', 'Lỗi', error?.message || 'Có lỗi xảy ra khi thêm vào giỏ hàng.');
-      }
-    } else {
-      showModal('warning', 'Thông báo', 'Vui lòng chọn màu và kích thước!');
-    }
-  }, [product, selectedVariant, quantity, user]);
+ const handleBuyNow = useCallback(() => {
+  if (!user || !user._id) {
+    showModal('warning', 'Thông báo', 'Bạn cần đăng nhập để mua ngay!');
+    return;
+  }
+  if (!product || !selectedVariant) {
+    showModal('warning', 'Thông báo', 'Vui lòng chọn màu và kích thước!');
+    return;
+  }
+
+  // ảnh an toàn
+  const img =
+    (Array.isArray(product.Images) && product.Images[0]) ||
+    product.Image ||
+    'https://via.placeholder.com/120';
+
+  // gói đúng format mà AddressScreen đang dùng
+  const selectedProducts = [
+    {
+      cartId: undefined,                      // mua ngay nên không qua cart
+      productId: product.ProductID,           // bắt buộc
+      name: product.Name,                     // hiển thị
+      color: selectedVariant.color,           // để tìm variant nếu thiếu
+      size: selectedVariant.size,             // để tìm variant nếu thiếu
+      price: Number(product.Price) || 0,      // đơn giá
+      quantity: quantity,                     // số lượng
+      image: img,                             // ảnh hiển thị
+      images: product.Images || [img],        // (tuỳ dùng)
+      categoryID: product.CategoryID || '',   // để payload order
+      // Có thể pass luôn variantID nếu muốn khỏi fetch lại:
+      // variantID: selectedVariant._id,
+    },
+  ];
+
+  router.push({
+    pathname: '/address',
+    params: { selectedProducts: JSON.stringify(selectedProducts) },
+  });
+}, [user, product, selectedVariant, quantity]);
 
   // UI
   if (!isDataLoaded || loading) {

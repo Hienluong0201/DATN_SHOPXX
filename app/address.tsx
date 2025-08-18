@@ -54,15 +54,16 @@ const AddressScreen = () => {
   const [zaloOrderId, setZaloOrderId] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [addressModalVisible, setAddressModalVisible] = useState(false);
+
   // Hàm làm mới 
   const onRefresh = async () => {
-  setRefreshing(true);
-  await Promise.all([
-    fetchAddresses(),
-    fetchVouchers(),
-  ]);
-  setRefreshing(false);
-};
+    setRefreshing(true);
+    await Promise.all([
+      fetchAddresses(),
+      fetchVouchers(),
+    ]);
+    setRefreshing(false);
+  };
 
   // --- Show modal lỗi/thành công ---
   const showModal = (type, title, message, isPaymentFailure = false) => {
@@ -139,201 +140,217 @@ const AddressScreen = () => {
     { id: 'credit_card', name: 'Thẻ tín dụng/Thẻ ghi nợ', gateway: 'Stripe' },
     { id: 'zalopay', name: 'Thanh toán bằng ZaloPay', gateway: 'ZaloPay' },
   ];
-  //Kiểm tra trạng thái thanh toán zalo pay
+
+  // Kiểm tra trạng thái thanh toán ZaloPay
   const checkZaloPayStatus = async (app_trans_id, orderId) => {
-  try {
-    // Gọi API backend kiểm tra trạng thái ZaloPay, truyền cả orderId để backend xử lý auto-cancel
-    const statusRes = await AxiosInstance().post('/order/zalopay-status', {
-      app_trans_id,
-      orderId         // Thêm dòng này!
-    });
-    console.log('Kết quả check trạng thái ZaloPay:', statusRes);
-
-    if (statusRes.return_code === 1) {
-      showModal('success', 'Thanh toán thành công', 'Giao dịch của bạn đã được xử lý!');
-      // router.push({pathname: '/checkout', params: ...});
-    } else if (statusRes.return_code === 3) {
-      showModal('warning', 'Đang chờ thanh toán', 'Giao dịch chưa được thực hiện. Vui lòng thanh toán trên ZaloPay và thử lại.');
-    } else {
-      showModal('error', 'Lỗi thanh toán', statusRes.return_message || 'Không xác định được trạng thái giao dịch!', true);
-    }
-  } catch (err) {
-    showModal('error', 'Lỗi', err.response?.data?.error || err.message || 'Không thể kiểm tra trạng thái!', true);
-  }
-};
-  // --- Gửi đơn hàng ---
-const handleContinue = async () => {
-  if (!selectedAddress) {
-    showModal('error', 'Lỗi', 'Vui lòng chọn địa chỉ giao hàng!');
-    return;
-  }
-  if (products.length === 0) {
-    showModal('error', 'Lỗi', 'Không có sản phẩm nào được chọn!');
-    return;
-  }
-  if (!selectedPaymentMethod) {
-    showModal('error', 'Lỗi', 'Vui lòng chọn phương thức thanh toán!');
-    return;
-  }
-  if (selectedVoucher && productsTotal < selectedVoucher.minOrderValue) {
-    showModal('error', 'Voucher không áp dụng', `Đơn hàng tối thiểu phải từ ${selectedVoucher.minOrderValue.toLocaleString('vi-VN')}đ để sử dụng voucher này!`);
-    return;
-  }
-
-  setVariantLoading(true);
-  try {
-    // Chuẩn bị order items
-    const orderItems = await Promise.all(
-      products.map(async (item) => {
-        let variantID = item.variantID;
-        if (!variantID) {
-          const variants = await fetchProductVariants(item.productId);
-          const selectedVariant = variants.find(
-            (variant) => variant.color === item.color && variant.size === item.size
-          ) || variants[0];
-          variantID = selectedVariant?._id || '683da229786c576173343579';
-        }
-        return {
-          variantID,
-          quantity: item.quantity || 1,
-          price: item.price || 150000,
-          productId: item.productId,
-          categoryID: item.categoryID,
-        };
-      })
-    );
-
-    const orderPayload = {
-      userID: user._id,
-      paymentInfo: {
-        paymentMethod: selectedPaymentMethod.id === 'credit_card' ? 'Stripe' : selectedPaymentMethod.id === 'zalopay' ? 'ZaloPay' : 'Cash',
-        status: 'Pending',
-      },
-      shippingAddress: selectedAddress.address,
-      name: selectedAddress.name || 'Nguyễn Văn A',
-      sdt: selectedAddress.sdt || '0909123456',
-      items: orderItems,
-      shippingFee,
-      totalAmount,
-      voucherCode: selectedVoucher?.code,
-    };
-
-    const orderResponse = await AxiosInstance().post('/order/checkout', orderPayload);
-
-    if (!orderResponse.order?._id) {
-      showModal('error', 'Lỗi', 'Không thể tạo đơn hàng. Vui lòng thử lại.');
-      return;
-    }
-
-    const params = {
-      orderId: orderResponse.order._id,
-      selectedAddress: JSON.stringify(selectedAddress),
-      selectedProducts: JSON.stringify(products),
-      shippingFee: shippingFee.toString(),
-      voucherDiscount: voucherDiscount.toString(),
-      productsTotal: productsTotal.toString(),
-      totalAmount: totalAmount.toString(),
-      paymentStatus: selectedPaymentMethod.id === 'credit_card' ? 'completed' : selectedPaymentMethod.id === 'zalopay' ? 'pending' : 'pending',
-    };
-
-    // Tiền mặt khi nhận hàng
-    if (selectedPaymentMethod.id === 'cash') {
-      router.replace({
-        pathname: '/checkout',
-        params,
+    try {
+      const statusRes = await AxiosInstance().post('/order/zalopay-status', {
+        app_trans_id,
+        orderId
       });
+      console.log('Kết quả check trạng thái ZaloPay:', statusRes);
+
+      if (statusRes.return_code === 1) {
+        showModal('success', 'Thanh toán thành công', 'Giao dịch của bạn đã được xử lý!');
+     } else if (statusRes.return_code === 3) {
+        showModal('error', 'Thanh toán chưa hoàn tất', 'Vui lòng thanh toán trên ZaloPay hoặc thử lại.', true);
+        setTimeout(() => {
+          setModalVisible(false);
+          router.replace('/payment');
+        }, 1200);
+      } else {
+        showModal('error', 'Lỗi thanh toán', statusRes.return_message || 'Không xác định được trạng thái giao dịch!', true);
+        setTimeout(() => {
+          setModalVisible(false);
+          router.replace('/payment');
+        }, 1200);
+      }
+    } catch (err) {
+      showModal('error', 'Lỗi', err.response?.data?.error || err.message || 'Không thể kiểm tra trạng thái!', true);
+    }
+  };
+
+  // --- Gửi đơn hàng ---
+  const handleContinue = async () => {
+    if (!selectedAddress) {
+      showModal('error', 'Lỗi', 'Vui lòng chọn địa chỉ giao hàng!');
+      return;
+    }
+    if (products.length === 0) {
+      showModal('error', 'Lỗi', 'Không có sản phẩm nào được chọn!');
+      return;
+    }
+    if (!selectedPaymentMethod) {
+      showModal('error', 'Lỗi', 'Vui lòng chọn phương thức thanh toán!');
+      return;
+    }
+    if (selectedVoucher && productsTotal < selectedVoucher.minOrderValue) {
+      showModal('error', 'Voucher không áp dụng', `Đơn hàng tối thiểu phải từ ${selectedVoucher.minOrderValue.toLocaleString('vi-VN')}đ để sử dụng voucher này!`);
       return;
     }
 
-    // Thanh toán Stripe (Credit Card)
-    if (selectedPaymentMethod.id === 'credit_card') {
-      try {
-        setPaymentLoading(true);
-        const stripePayload = {
-          orderId: orderResponse.order._id,
-          amount: totalAmount,
-          currency: 'vnd',
-        };
-        const stripeResponse = await AxiosInstance().post('/order/stripe-payment-intent', stripePayload);
-        const { clientSecret, error } = stripeResponse;
-        if (error || !clientSecret) {
-          throw new Error(error || 'Không nhận được clientSecret từ server');
-        }
+    setVariantLoading(true);
+    try {
+      // Chuẩn bị order items
+      const orderItems = await Promise.all(
+        products.map(async (item) => {
+          let variantID = item.variantID;
+          if (!variantID) {
+            const variants = await fetchProductVariants(item.productId);
+            const selectedVariant = variants.find(
+              (variant) => variant.color === item.color && variant.size === item.size
+            ) || variants[0];
+            variantID = selectedVariant?._id || '683da229786c576173343579';
+          }
+          return {
+            variantID,
+            quantity: item.quantity || 1,
+            price: item.price || 150000,
+            productId: item.productId,
+            categoryID: item.categoryID,
+          };
+        })
+      );
 
-        const { error: initError } = await initPaymentSheet({
-          paymentIntentClientSecret: clientSecret,
-          merchantDisplayName: 'Your Shop Name',
-          allowsDelayedPaymentMethods: true,
-        });
+      const orderPayload = {
+        userID: user._id,
+        paymentInfo: {
+          paymentMethod: selectedPaymentMethod.id === 'credit_card' ? 'Stripe' : selectedPaymentMethod.id === 'zalopay' ? 'ZaloPay' : 'Cash',
+          status: 'pending', // Sử dụng lowercase để đồng bộ với schema
+        },
+        shippingAddress: selectedAddress.address,
+        name: selectedAddress.name || 'Nguyễn Văn A',
+        sdt: selectedAddress.sdt || '0909123456',
+        items: orderItems,
+        shippingFee,
+        totalAmount,
+        voucherCode: selectedVoucher?.code,
+      };
 
-        if (initError) {
-          showModal('error', 'Lỗi', `Không thể khởi tạo thanh toán: ${initError.message}`, true);
-          return;
-        }
+      const orderResponse = await AxiosInstance().post('/order/checkout', orderPayload);
 
-        const { error: paymentError } = await presentPaymentSheet();
-        if (paymentError) {
-          showModal('error', 'Lỗi', `Thanh toán thất bại`, true);
-          return;
-        }
+      if (!orderResponse.order?._id) {
+        showModal('error', 'Lỗi', 'Không thể tạo đơn hàng. Vui lòng thử lại.');
+        return;
+      }
 
-        showModal('success', 'Thành công', 'Thanh toán đã được xử lý thành công!');
-        router.push({
+      const params = {
+        orderId: orderResponse.order._id,
+        selectedAddress: JSON.stringify(selectedAddress),
+        selectedProducts: JSON.stringify(products),
+        shippingFee: shippingFee.toString(),
+        voucherDiscount: voucherDiscount.toString(),
+        productsTotal: productsTotal.toString(),
+        totalAmount: totalAmount.toString(),
+        paymentStatus: selectedPaymentMethod.id === 'credit_card' ? 'paid' : selectedPaymentMethod.id === 'zalopay' ? 'pending' : 'pending',
+      };
+
+      // Tiền mặt khi nhận hàng
+      if (selectedPaymentMethod.id === 'cash') {
+        router.replace({
           pathname: '/checkout',
           params,
         });
-      } catch (stripeError) {
-        showModal('error', 'Lỗi', `Không thể xử lý thanh toán: ${stripeError.message || 'Vui lòng thử lại'}`, true);
-      } finally {
-        setPaymentLoading(false);
+        return;
       }
-      return;
-    }
 
-    // Thanh toán ZaloPay
-    if (selectedPaymentMethod.id === 'zalopay') {
-      try {
-        setPaymentLoading(true);
-        const zalopayPayload = {
-          orderId: orderResponse.order._id,
-          amount: totalAmount,
-          currency: 'vnd',
-        };
-        const zalopayResponse = await AxiosInstance().post('/order/zalopay', zalopayPayload);
-
-        const { order_url, return_code, return_message, app_trans_id } = zalopayResponse;
-        if (return_code !== 1) {
-          throw new Error(return_message || 'Không thể tạo giao dịch ZaloPay');
-        }
-
-        if (order_url && app_trans_id) {
-          setZaloAppTransId(app_trans_id); // <-- Lưu app_trans_id để auto check khi quay lại app!
-          setZaloOrderId(orderResponse.order._id);
-          const canOpen = await Linking.canOpenURL(order_url);
-          if (canOpen) {
-            await Linking.openURL(order_url);
-            showModal('success', 'Thành công', 'Đã mở ứng dụng ZaloPay để thanh toán!');
-            // KHÔNG push sang checkout ở đây nữa, để check trạng thái tự động!
-          } else {
-            throw new Error('Không thể mở ứng dụng ZaloPay');
+      // Thanh toán Stripe (Credit Card)
+      if (selectedPaymentMethod.id === 'credit_card') {
+        try {
+          setPaymentLoading(true);
+          const stripePayload = {
+            orderId: orderResponse.order._id,
+            amount: totalAmount,
+            currency: 'vnd',
+          };
+          const stripeResponse = await AxiosInstance().post('/order/stripe-payment-intent', stripePayload);
+          const { clientSecret, error } = stripeResponse;
+          if (error || !clientSecret) {
+            throw new Error(error || 'Không nhận được clientSecret từ server');
           }
-        } else {
-          throw new Error('Không nhận được order_url hoặc app_trans_id từ server');
-        }
-      } catch (zalopayError) {
-        showModal('error', 'Lỗi', `Không thể xử lý thanh toán ZaloPay: ${zalopayError.message || 'Vui lòng thử lại'}`, true);
-      } finally {
-        setPaymentLoading(false);
-      }
-      return;
-    }
 
-  } catch (err) {
-    showModal('error', 'Lỗi', err.response?.data?.message || err.message || 'Không thể tạo đơn hàng. Vui lòng thử lại.');
-  } finally {
-    setVariantLoading(false);
-  }
-};
+          const { error: initError } = await initPaymentSheet({
+            paymentIntentClientSecret: clientSecret,
+            merchantDisplayName: 'Your Shop Name',
+            allowsDelayedPaymentMethods: true,
+          });
+
+          if (initError) {
+            showModal('error', 'Lỗi', `Không thể khởi tạo thanh toán: ${initError.message}`, true);
+            return;
+          }
+
+          const { error: paymentError } = await presentPaymentSheet();
+         if (paymentError) {
+          showModal('error', 'Lỗi', `Thanh toán thất bại`, true);
+          setTimeout(() => {
+            setModalVisible(false);
+            router.replace('/payment');
+          }, 1200);
+          return;
+        }
+
+          // Cập nhật trạng thái đơn hàng thành "paid"
+          await AxiosInstance().put(`/order/${orderResponse.order._id}`, {
+            orderStatus: 'paid',
+          });
+
+          showModal('success', 'Thành công', 'Thanh toán đã được xử lý thành công!');
+          router.push({
+            pathname: '/checkout',
+            params,
+          });
+        } catch (stripeError) {
+          showModal('error', 'Lỗi', `Không thể xử lý thanh toán: ${stripeError.message || 'Vui lòng thử lại'}`, true);
+        } finally {
+          setPaymentLoading(false);
+        }
+        return;
+      }
+
+      // Thanh toán ZaloPay
+      if (selectedPaymentMethod.id === 'zalopay') {
+        try {
+          setPaymentLoading(true);
+          const zalopayPayload = {
+            orderId: orderResponse.order._id,
+            amount: totalAmount,
+            currency: 'vnd',
+          };
+          const zalopayResponse = await AxiosInstance().post('/order/zalopay', zalopayPayload);
+
+          const { order_url, return_code, return_message, app_trans_id } = zalopayResponse;
+          if (return_code !== 1) {
+            throw new Error(return_message || 'Không thể tạo giao dịch ZaloPay');
+          }
+
+          if (order_url && app_trans_id) {
+            setZaloAppTransId(app_trans_id);
+            setZaloOrderId(orderResponse.order._id);
+            const canOpen = await Linking.canOpenURL(order_url);
+            if (canOpen) {
+              await Linking.openURL(order_url);
+              showModal('success', 'Thành công', 'Đã mở ứng dụng ZaloPay để thanh toán!');
+            } else {
+              throw new Error('Không thể mở ứng dụng ZaloPay');
+            }
+          } else {
+            throw new Error('Không nhận được order_url hoặc app_trans_id từ server');
+          }
+        } catch (zalopayError) {
+          showModal('error', 'Lỗi', `Không thể xử lý thanh toán ZaloPay: ${zalopayError.message || 'Vui lòng thử lại'}`, true);
+        } finally {
+          setPaymentLoading(false);
+        }
+        return;
+      }
+
+    } catch (err) {
+      showModal('error', 'Lỗi', err.response?.data?.message || err.message || 'Không thể tạo đơn hàng. Vui lòng thử lại.');
+    } finally {
+      setVariantLoading(false);
+    }
+  };
 //check thanh toán
 useEffect(() => {
   if (!zaloAppTransId || !zaloOrderId) return;
