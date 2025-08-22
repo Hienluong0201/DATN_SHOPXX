@@ -5,8 +5,9 @@ import { useAuth } from '../store/useAuth';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import CustomModal from './components/CustomModal';
-import { useStripe, initPaymentSheet, presentPaymentSheet } from '@stripe/stripe-react-native';
-
+import { useStripe } from '@stripe/stripe-react-native';
+import { WebView } from 'react-native-webview';
+import { RefreshControl } from 'react-native';
 const COUNTDOWN_MINUTES = 15;
 
 const Payment = () => {
@@ -28,12 +29,37 @@ const Payment = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   // State cho Stripe payment
   const [stripeLoading, setStripeLoading] = useState(false);
-
+  const [vnpayUrl, setVnpayUrl] = useState(null);
   const showModal = (type, title, message) => {
     setModalConfig({ type, title, message });
     setModalVisible(true);
+    fetchOrders();
   };
 
+const [refreshing, setRefreshing] = useState(false);
+
+const fetchOrders = async () => {
+  setLoading(true);
+  try {
+    const res = await AxiosInstance().get(`/order/unpaid-gateway-orders`);
+    const unpaidOrders = (res.orders || []).filter(o => o.userID === user._id);
+    unpaidOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    setOrders(unpaidOrders);
+    if (unpaidOrders.length === 0)
+      setMsg('Bạn không có đơn hàng ZaloPay, Stripe hoặc VNPay nào cần thanh toán.');
+  } catch (err) {
+    setMsg('Không thể lấy dữ liệu đơn hàng.');
+    setOrders([]);
+  } finally {
+    setLoading(false);
+    setRefreshing(false); // reset sau khi kéo xong
+  }
+};
+
+const onRefresh = () => {
+  setRefreshing(true);
+  fetchOrders();
+};
   // Đổi phương thức thanh toán sang COD
   const handleChangeToCOD = async (order) => {
     try {
@@ -52,6 +78,28 @@ const Payment = () => {
       showModal('error', 'Lỗi', e.response?.data?.message || 'Không thể chuyển sang COD');
     }
   };
+  const handleRetryVNPAY = async () => {
+  if (!selectedOrder) return;
+  setPaymentModalVisible(false);
+  try {
+    const resp = await AxiosInstance().post(`/order/${selectedOrder._id}/retry-vnpay`, {
+      bankCode: "NCB" // tạm hardcode, sau này có thể cho user chọn bank
+    });
+
+    if (resp.paymentUrl) {
+      // 👉 mở Modal WebView với link trả về
+      setVnpayUrl(resp.paymentUrl);
+    } else {
+      showModal('error', 'Lỗi', resp.message || 'Không tạo được link VNPAY.');
+    }
+  } catch (e) {
+    showModal(
+      'error',
+      'Lỗi',
+      e.response?.data?.message || 'Không thể tạo lại thanh toán VNPAY!'
+    );
+  }
+};
 
   // Cập nhật now mỗi giây (giúp countdown chạy)
   useEffect(() => {
@@ -69,7 +117,7 @@ const Payment = () => {
         const unpaidOrders = (res.orders || []).filter(o => o.userID === user._id);
         unpaidOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         setOrders(unpaidOrders);
-        if (unpaidOrders.length === 0) setMsg('Bạn không có đơn hàng ZaloPay hoặc Stripe nào cần thanh toán.');
+        if (unpaidOrders.length === 0) setMsg('Bạn không có đơn hàng ZaloPay,  Stripe hoặc VNPay nào cần thanh toán.');
         setLoading(false);
       } catch (err) {
         setMsg('Không thể lấy dữ liệu đơn hàng.');
@@ -175,7 +223,9 @@ const Payment = () => {
       ) : orders.length === 0 ? (
         <Text style={styles.noOrder}>{msg}</Text>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 36 }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 36 }} refreshControl={
+    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+  }>
           {orders.map((order) => {
             const timeLeft = getTimeLeft(order.createdAt);
             const m = Math.floor(timeLeft / 60);
@@ -283,6 +333,15 @@ const Payment = () => {
               <Text style={styles.modalButtonText}>Thanh toán bằng Stripe</Text>
             </TouchableOpacity>
             <TouchableOpacity
+        style={[styles.modalButton, stripeLoading && styles.modalButtonDisabled]}
+        onPress={handleRetryVNPAY}
+        disabled={stripeLoading}
+      >
+        <Ionicons name="logo-usd" size={24} color="#c90000" />
+        <Text style={styles.modalButtonText}>Thanh toán bằng VNPAY</Text>
+      </TouchableOpacity>
+
+            <TouchableOpacity
               style={styles.modalCancelButton}
               onPress={() => setPaymentModalVisible(false)}
             >
@@ -291,6 +350,41 @@ const Payment = () => {
           </View>
         </View>
       </Modal>
+      <Modal
+        visible={!!vnpayUrl}
+        animationType="slide"
+        onRequestClose={() => {
+          showModal('error', 'Thanh toán chưa hoàn tất', 'Bạn đã thoát trước khi thanh toán xong.', true);
+          setVnpayUrl(null);
+        }}
+      >
+        <WebView
+          source={{ uri: vnpayUrl }}
+          onMessage={(event) => {
+            try {
+              const data = JSON.parse(event.nativeEvent.data);
+              if (data.status === "success") {
+                showModal('success', 'Thanh toán thành công', 'Đơn hàng đã được xử lý!');
+              } else {
+                showModal('error', 'Thanh toán thất bại', data.message || 'Vui lòng thử lại', true);
+              }
+            } catch (e) {
+              showModal('error', 'Lỗi', 'Không đọc được dữ liệu từ VNPAY.', true);
+            }
+            setVnpayUrl(null); // đóng WebView
+          }}
+          onError={() => {
+            showModal('error', 'Thanh toán lỗi', 'Kết nối không thành công, vui lòng thử lại.', true);
+            setVnpayUrl(null);
+          }}
+          onNavigationStateChange={(navState) => {
+            if (navState.url.includes("vnpay_return")) {
+              console.log("👉 Đã quay về returnUrl");
+            }
+          }}
+        />
+      </Modal>
+
     </View>
   );
 };

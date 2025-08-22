@@ -35,6 +35,7 @@ const getPaymentLabel = (method) => {
   if (lower.includes('cash')) return 'Tiền mặt';
   return method;
 };
+
 const getPaymentIcon = (method) => {
   if (!method) return 'help-circle-outline';
   const lower = method.toLowerCase();
@@ -59,7 +60,7 @@ const formatDate = (dateString) =>
 const formatVoucher = (voucher) => {
   if (!voucher) return '';
   if (voucher.discountType === 'percent') {
-    return `Giảm ${voucher.discountValue}`;
+    return `Giảm ${voucher.discountValue}%`;
   }
   if (voucher.discountType === 'fixed') {
     return `Giảm ${formatPrice(voucher.discountValue)}`;
@@ -111,6 +112,8 @@ const CustomModal = ({
     </Modal>
   );
 };
+
+// CustomCancelModal
 const CustomCancelModal = ({
   isVisible,
   type,
@@ -136,6 +139,7 @@ const CustomCancelModal = ({
     </Modal>
   );
 };
+
 const OrderDetail = () => {
   const { orderId } = useLocalSearchParams();
   const { getProductById, getProductOrFetch } = useProducts();
@@ -171,137 +175,234 @@ const OrderDetail = () => {
   const [cancelModalMessage, setCancelModalMessage] = useState('');
 
 
-// 2) Thay toàn bộ useEffect cũ bằng đoạn này:
-useEffect(() => {
-  const fetchOrderDetails = async () => {
-    setLoading(true);
+  // Sửa đánh giá 
+  // ====== REVIEW: constants & states ======
+    const REVIEW_BASE = 'https://datn-sever.onrender.com/review'; // giữ nguyên base bạn đang dùng
+
+    // Map productID -> review của chính user (nếu có)
+    const [userReviews, setUserReviews] = useState({}); 
+
+    // 'create' | 'edit'
+    const [reviewMode, setReviewMode] = useState('create');
+
+    // tiện dụng: lấy userId (ưu tiên store auth, fallback orderInfo)
+    const getUserId = () => user?._id || orderInfo?.userID;
+
+    // kiểm tra được sửa nữa không (nếu chưa thêm editCount thì mặc định true)
+    const canEditReview = (rev) => {
+      if (!rev) return false;
+      return typeof rev.editCount === 'number' ? rev.editCount < 1 : true;
+    };
+
+  useEffect(() => {
+    const fetchOrderDetails = async () => {
+      setLoading(true);
+      try {
+        if (!orderId) {
+          setError('Không tìm thấy mã đơn hàng');
+          setLoading(false);
+          return;
+        }
+        const [detailsRes, orderRes] = await Promise.all([
+          AxiosInstance().get(`/orderdetail/order/${orderId}`),
+          AxiosInstance().get(`/order/${orderId}`)
+        ]);
+
+        const enrichedDetails = await Promise.all(
+          (Array.isArray(detailsRes) ? detailsRes : []).map(async (detail) => {
+            const productId = detail?.variantID?.productID;
+            let product = productId ? getProductById(productId) : undefined;
+
+            if (!product && productId) {
+              product = await getProductOrFetch(productId);
+              console.log("🔄 Fetched by id (not in cache/UI):", productId, !!product);
+            } else {
+              console.log("✅ From cache/UI:", productId, !!product);
+            }
+
+            let images = [];
+            if (Array.isArray(product?.Images) && product.Images.length > 0) images = product.Images;
+            else if (Array.isArray(product?.images) && product.images.length > 0) images = product.images;
+            else if (product?.Image) images = [product.Image];
+            else images = ['https://via.placeholder.com/80'];
+
+            return {
+              ...detail,
+              Name: product?.Name || 'Sản phẩm không xác định',
+              Images: images,
+              Brand: product?.Brand || "Không xác định",
+              Category: product?.CategoryID || "",
+            };
+          })
+        );
+
+        const foundCount = enrichedDetails.filter(d => d.Name !== 'Sản phẩm không xác định').length;
+        console.log(`📦 Enriched from cache/fetch: ${foundCount}/${enrichedDetails.length}`);
+
+        setOrderDetails(enrichedDetails);
+        setOrderInfo(orderRes); // Đảm bảo orderRes là object hợp lệ
+        setError(null);
+      } catch (err) {
+        setError('Không thể tải chi tiết đơn hàng. Vui lòng thử lại sau.');
+        setOrderDetails([]);
+        setOrderInfo(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrderDetails();
+  }, [orderId, getProductById, getProductOrFetch]);
+
+  useEffect(() => {
+  const loadUserReviews = async () => {
+    const uid = getUserId();
+    if (!uid || !Array.isArray(orderDetails) || orderDetails.length === 0) return;
+
+    // gom các productID duy nhất trong đơn
+    const productIds = Array.from(
+      new Set(
+        orderDetails
+          .map(d => d?.variantID?.productID)
+          .filter(Boolean)
+      )
+    );
+
     try {
-      const [detailsRes, orderRes] = await Promise.all([
-        AxiosInstance().get(`/orderdetail/order/${orderId}`),
-        AxiosInstance().get(`/order/${orderId}`)
-      ]);
+      const entries = await Promise.all(productIds.map(async (pid) => {
+        try {
+          // Backend của bạn có route GET /review/product/:productID
+          const list = await AxiosInstance().get(`/review/product/${pid}`);
+          const arr = Array.isArray(list) ? list : (list?.data || []);
+          // tìm review của chính user
+          const myReview = arr.find(r => {
+            const rid = (r?.userID?._id) || r?.userID; // vì bạn có populate
+            return String(rid) === String(uid);
+          }) || null;
+          return [pid, myReview];
+        } catch (e) {
+          return [pid, null];
+        }
+      }));
 
-      // ✅ Ưu tiên lấy từ cache 50 (đã prefetch); nếu thiếu thì fetch theo id
-      const enrichedDetails = await Promise.all(
-        (Array.isArray(detailsRes) ? detailsRes : []).map(async (detail) => {
-          const productId = detail?.variantID?.productID;
-
-          // 1) thử lấy từ cache/UI trước
-          let product = productId ? getProductById(productId) : undefined;
-
-          // 2) nếu chưa có → gọi API theo id và nhét vào cache
-          if (!product && productId) {
-            product = await getProductOrFetch(productId);
-            console.log("🔄 Fetched by id (not in cache/UI):", productId, !!product);
-          } else {
-            console.log("✅ From cache/UI:", productId, !!product);
-          }
-
-          // chuẩn hoá ảnh
-          let images: string[] = [];
-          if (Array.isArray(product?.Images) && product.Images.length > 0) images = product.Images;
-          else if (Array.isArray(product?.images) && product.images.length > 0) images = product.images;
-          else if (product?.Image) images = [product.Image];
-          else images = ['https://via.placeholder.com/80'];
-
-          return {
-            ...detail,
-            Name: product?.Name || 'Sản phẩm không xác định',
-            Images: images,
-            Brand: product?.Brand || "Không xác định",
-            Category: product?.CategoryID || "",
-          };
-        })
-      );
-
-      // Log kiểm tra xem enrich được bao nhiêu sản phẩm hợp lệ
-      const foundCount = enrichedDetails.filter(d => d.Name !== 'Sản phẩm không xác định').length;
-      console.log(`📦 Enriched from cache/fetch: ${foundCount}/${enrichedDetails.length}`);
-
-      setOrderDetails(enrichedDetails);
-      setOrderInfo(orderRes);
-      setError(null);
-    } catch (err) {
-      setError('Không thể tải chi tiết đơn hàng. Vui lòng thử lại sau.');
-      setOrderDetails([]);
-      setOrderInfo(null);
-    } finally {
-      setLoading(false);
+      setUserReviews(Object.fromEntries(entries));
+    } catch (e) {
+      // bỏ qua yên lặng
     }
   };
 
-  if (orderId) fetchOrderDetails();
-  else {
-    setError('Không tìm thấy mã đơn hàng');
-    setLoading(false);
-  }
-}, [orderId, getProductById, getProductOrFetch]); // ✅ thêm getProductOrFetch vào deps
+  loadUserReviews();
+}, [orderDetails, user?._id, orderInfo?._id]);
+
   const openCancelModal = () => {
     setCancelModalVisible(true);
     setCancelReason('');
     setOtherReason('');
   };
 
- const submitCancelOrder = async () => {
-  if (!cancelReason || (cancelReason === 'Khác' && !otherReason.trim())) {
-    setCancelModalType('error');
-    setCancelModalTitle('Lỗi');
-    setCancelModalMessage('Vui lòng chọn hoặc nhập lý do huỷ!');
-    setCancelModalResultVisible(true);
-    return;
-  }
-  setSubmittingCancel(true);
-  try {
-    const reasonText = cancelReason === 'Khác' ? otherReason.trim() : cancelReason;
-    await AxiosInstance().put(`/order/${orderInfo._id}`, {
-      orderStatus: "cancelled",
-      cancelReason: reasonText
-    });
-    setCancelModalType('success');
-    setCancelModalTitle('Thông báo');
-    setCancelModalMessage('Đã hủy đơn hàng thành công');
-    setCancelModalResultVisible(true);
-    setOrderInfo(prev => ({ ...prev, orderStatus: 'cancelled' }));
-    setCancelModalVisible(false);
-  } catch (error) {
-    setCancelModalType('error');
-    setCancelModalTitle('Lỗi');
-    setCancelModalMessage(error?.response?.data?.message || 'Không thể hủy đơn hàng.');
-    setCancelModalResultVisible(true);
-  } finally {
-    setSubmittingCancel(false);
-  }
-};
-
-  const openReviewModal = (product) => {
-    setReviewProduct(product);
-    setReviewRating(5);
-    setReviewComment('');
-    setReviewModalVisible(true);
+  const submitCancelOrder = async () => {
+    if (!cancelReason || (cancelReason === 'Khác' && !otherReason.trim())) {
+      setCancelModalType('error');
+      setCancelModalTitle('Lỗi');
+      setCancelModalMessage('Vui lòng chọn hoặc nhập lý do hủy!');
+      setCancelModalResultVisible(true);
+      return;
+    }
+    setSubmittingCancel(true);
+    try {
+      const reasonText = cancelReason === 'Khác' ? otherReason.trim() : cancelReason;
+      const response = await AxiosInstance().put(`/order/${orderInfo._id}`, {
+        orderStatus: "cancelled",
+        cancellationReason: reasonText
+      });
+      setCancelModalType('success');
+      setCancelModalTitle('Thông báo');
+      setCancelModalMessage('Đã hủy đơn hàng thành công');
+      setCancelModalResultVisible(true);
+      setOrderInfo(prev => ({
+        ...prev,
+        orderStatus: 'cancelled',
+        cancellationReason: response.cancellationReason || reasonText
+      }));
+      setCancelModalVisible(false);
+    } catch (error) {
+      setCancelModalType('error');
+      setCancelModalTitle('Lỗi');
+      setCancelModalMessage(error?.response?.data?.message || 'Không thể hủy đơn hàng.');
+      setCancelModalResultVisible(true);
+    } finally {
+      setSubmittingCancel(false);
+    }
   };
 
-  const handleSendReview = async () => {
-    const userID = user?._id || orderInfo?.userID;
-    if (!userID || !reviewProduct) {
-      setModalType('error');
-      setModalTitle('Lỗi');
-      setModalMessage('Bạn cần đăng nhập!');
-      setModalVisible(true);
-      return;
-    }
-    if (!reviewComment.trim()) {
-      setModalType('error');
-      setModalTitle('Lỗi');
-      setModalMessage('Vui lòng nhập nội dung đánh giá!');
-      setModalVisible(true);
-      return;
-    }
+ const openReviewModal = (product, mode = 'create') => {
+  setReviewProduct(product);
+  setReviewMode(mode);
 
-    setSendingReview(true);
-    try {
+  if (mode === 'edit') {
+    const pid = product?.variantID?.productID;
+    const myReview = userReviews[pid];
+    setReviewRating(myReview?.rating ?? 5);
+    setReviewComment(myReview?.comment ?? '');
+    setReviewImages(Array.isArray(myReview?.images) ? myReview.images : []);
+  } else {
+    setReviewRating(5);
+    setReviewComment('');
+    setReviewImages([]);
+  }
+
+  setReviewModalVisible(true);
+};
+
+
+ const handleSendReview = async () => {
+  const userID = getUserId();
+  if (!userID || !reviewProduct) {
+    setModalType('error');
+    setModalTitle('Lỗi');
+    setModalMessage('Bạn cần đăng nhập!');
+    setModalVisible(true);
+    return;
+  }
+  if (!reviewComment.trim()) {
+    setModalType('error');
+    setModalTitle('Lỗi');
+    setModalMessage('Vui lòng nhập nội dung đánh giá!');
+    setModalVisible(true);
+    return;
+  }
+
+  setSendingReview(true);
+  const pid = reviewProduct.variantID.productID;
+
+  try {
+    if (reviewMode === 'edit' && userReviews[pid]?._id) {
+      // --- UPDATE (không up ảnh, dùng JSON cho chắc vì PUT backend của bạn đang parse JSON) ---
+      const reviewId = userReviews[pid]._id;
+      const payload = {
+        userID,
+        rating: reviewRating,
+        comment: reviewComment.trim(),
+        status: true,
+        // Nếu backend đã hỗ trợ update ảnh qua multipart, có thể chuyển sang FormData như POST.
+      };
+      const updated = await AxiosInstance().put(`/review/${reviewId}`, payload);
+
+      // cập nhật cache local
+      setUserReviews(prev => ({ ...prev, [pid]: updated?.data || updated || payload }));
+
+      setModalType('success');
+      setModalTitle('Thành công');
+      setModalMessage('Cập nhật đánh giá thành công!');
+      setModalVisible(true);
+      setReviewModalVisible(false);
+      setReviewImages([]);
+
+    } else {
+      // --- CREATE (giữ luồng cũ: multipart + ảnh) ---
       const formData = new FormData();
       formData.append('userID', userID);
-      formData.append('productID', reviewProduct.variantID.productID);
+      formData.append('productID', pid);
       formData.append('rating', String(reviewRating));
       formData.append('comment', reviewComment.trim());
       formData.append('status', 'true');
@@ -317,16 +418,17 @@ useEffect(() => {
         formData.append('images', { uri, name: filename, type: mimeType });
       });
 
-      const res = await fetch('https://datn-sever.onrender.com/review', {
+      const res = await fetch(`${REVIEW_BASE}`, {
         method: 'POST',
         body: formData,
         headers: { Accept: 'application/json' },
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || 'Lỗi không xác định');
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Lỗi không xác định');
+
+      // lưu review vừa tạo
+      setUserReviews(prev => ({ ...prev, [pid]: data }));
 
       setModalType('success');
       setModalTitle('Thành công');
@@ -335,22 +437,24 @@ useEffect(() => {
       setReviewModalVisible(false);
       setReviewImages([]);
       setReviewComment('');
-    } catch (err) {
-      setModalType('error');
-      setModalTitle('Lỗi');
-      setModalMessage(err?.message || 'Không gửi được đánh giá');
-      setModalVisible(true);
     }
+  } catch (err) {
+    setModalType('error');
+    setModalTitle('Lỗi');
+    setModalMessage(err?.response?.data?.message || err?.message || 'Không gửi được đánh giá');
+    setModalVisible(true);
+  } finally {
     setSendingReview(false);
-  };
+  }
+};
+
 
   const goBack = () => router.back();
 
-  // ✅ Hàm điều hướng sang ProductDetail
   const goToProductDetail = (productId) => {
     if (!productId) return;
     router.push({
-      pathname: './productDetail',   // hoặc '/productDetail' nếu file ở app/productDetail.tsx
+      pathname: './productDetail',
       params: { productId: String(productId) },
     });
   };
@@ -403,11 +507,22 @@ useEffect(() => {
         <Text style={styles.infoValue}><Ionicons name="location" size={16} /> {orderInfo.shippingAddress}</Text>
         <Text style={styles.infoLabel}>Phương thức thanh toán</Text>
         <Text style={styles.infoValue}>{getPaymentLabel(orderInfo.paymentID?.paymentMethod)}</Text>
+        <Text style={styles.infoLabel}>Trạng thái đơn hàng</Text>
+        <Text style={[styles.infoValue, { color: statusProps.color, fontWeight: 'bold' }]}>
+          {statusProps.text}
+        </Text>
+        {orderInfo?.orderStatus === 'cancelled' && orderInfo?.cancellationReason && (
+          <>
+            <Text style={styles.infoLabel}>Lý do hủy</Text>
+            <Text style={[styles.infoValue, { color: '#721c24', backgroundColor: '#fecaca', padding: 8, borderRadius: 8 }]}>
+              {orderInfo.cancellationReason}
+            </Text>
+          </>
+        )}
       </View>
 
       <View style={styles.productList}>
         <Text style={styles.sectionTitle}>Sản phẩm ({orderDetails.length})</Text>
-
         {orderDetails.map((detail) => (
           <View key={detail._id} style={styles.productCard}>
             <ScrollView
@@ -419,8 +534,6 @@ useEffect(() => {
                 <Image key={idx} source={{ uri: img }} style={styles.productImage} />
               ))}
             </ScrollView>
-
-            {/* ✅ Bấm vào phần thông tin sẽ mở ProductDetail */}
             <TouchableOpacity
               style={styles.productInfo}
               activeOpacity={0.7}
@@ -441,15 +554,48 @@ useEffect(() => {
               <Text style={styles.productDetail}>
                 Giá: <Text style={styles.productPrice}>{formatPrice(detail.price)}</Text>
               </Text>
+            {orderInfo.orderStatus === 'delivered' && (() => {
+              const pid = detail?.variantID?.productID;
+              const myReview = userReviews[pid];
+              const editable = canEditReview(myReview);
 
-              {orderInfo.orderStatus === 'delivered' && (
-                <TouchableOpacity
-                  style={styles.rateBtn}
-                  onPress={() => openReviewModal(detail)}
-                >
-                  <Text style={styles.rateBtnText}>Đánh giá</Text>
-                </TouchableOpacity>
-              )}
+              return (
+                <View style={{ marginTop: 6 }}>
+                  {/* Nếu đã có review, show tóm tắt */}
+                  {myReview && (
+                    <View style={{ marginBottom: 6 }}>
+                      <Text style={{ fontSize: 13, color: '#555' }}>
+                        Bạn đã đánh giá: <Text style={{ fontWeight: '700' }}>{myReview.rating}★</Text>
+                      </Text>
+                      {!!myReview.comment && (
+                        <Text style={{ fontSize: 13, color: '#777' }} numberOfLines={2}>
+                          “{myReview.comment}”
+                        </Text>
+                      )}
+                      {!editable && (
+                        <Text style={{ fontSize: 12, color: '#D32F2F', marginTop: 2 }}>
+                          Bạn đã hết lượt sửa.
+                        </Text>
+                      )}
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    style={[
+                      styles.rateBtn,
+                      myReview && !editable ? { backgroundColor: '#ddd' } : null
+                    ]}
+                    onPress={() => openReviewModal(detail, myReview ? 'edit' : 'create')}
+                    disabled={myReview && !editable} // hết lượt sửa -> chỉ xem tóm tắt
+                  >
+                    <Text style={styles.rateBtnText}>
+                      {myReview ? (editable ? 'Sửa đánh giá' : 'Đã đánh giá') : 'Đánh giá'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })()}
+
             </TouchableOpacity>
           </View>
         ))}
@@ -506,13 +652,13 @@ useEffect(() => {
         <Text style={styles.contactText}>Liên hệ shop</Text>
       </TouchableOpacity>
 
-      {orderInfo.orderStatus === 'pending' && (
+      {orderInfo?.orderStatus === 'pending' && (
         <TouchableOpacity
           style={[styles.contactBtn, { backgroundColor: "#D32F2F", marginBottom: 10 }]}
           onPress={openCancelModal}
         >
           <Ionicons name="close-circle-outline" size={20} color="#fff" style={{ marginRight: 7 }} />
-          <Text style={styles.contactText}>Huỷ đơn hàng</Text>
+          <Text style={styles.contactText}>Hủy đơn hàng</Text>
         </TouchableOpacity>
       )}
 
@@ -523,7 +669,7 @@ useEffect(() => {
         animationType="slide"
         onRequestClose={() => setCancelModalVisible(false)}
       >
-       <View style={{
+        <View style={{
           flex: 1, backgroundColor: 'rgba(0,0,0,0.25)',
           justifyContent: 'center', alignItems: 'center'
         }}>
@@ -534,7 +680,7 @@ useEffect(() => {
             padding: 20,
             alignItems: 'center'
           }}>
-            <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 15, color: '#D32F2F' }}>Chọn lý do huỷ đơn</Text>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 15, color: '#D32F2F' }}>Chọn lý do hủy đơn</Text>
             {cancelReasonsList.map((reason, idx) => (
               <TouchableOpacity
                 key={idx}
@@ -556,7 +702,7 @@ useEffect(() => {
                   borderColor: '#e4633b', borderWidth: 1, borderRadius: 10,
                   marginTop: 10, width: '100%', padding: 10, fontSize: 15
                 }}
-                placeholder="Nhập lý do huỷ đơn..."
+                placeholder="Nhập lý do hủy đơn..."
                 value={otherReason}
                 onChangeText={setOtherReason}
                 multiline
@@ -584,7 +730,7 @@ useEffect(() => {
                 disabled={submittingCancel}
               >
                 <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>
-                  {submittingCancel ? "Đang gửi..." : "Xác nhận huỷ"}
+                  {submittingCancel ? "Đang gửi..." : "Xác nhận hủy"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -612,7 +758,7 @@ useEffect(() => {
               {reviewProduct?.Name}
             </Text>
             <View style={{ flexDirection: 'row', marginBottom: 12 }}>
-              {[1,2,3,4,5].map(i => (
+              {[1, 2, 3, 4, 5].map(i => (
                 <TouchableOpacity key={i} onPress={() => setReviewRating(i)}>
                   <Ionicons
                     name={reviewRating >= i ? "star" : "star-outline"}
@@ -709,12 +855,12 @@ useEffect(() => {
         showConfirmButton={true}
       />
       <CustomCancelModal
-      isVisible={cancelModalResultVisible}
-      type={cancelModalType}
-      title={cancelModalTitle}
-      message={cancelModalMessage}
-      onClose={() => setCancelModalResultVisible(false)}
-    />
+        isVisible={cancelModalResultVisible}
+        type={cancelModalType}
+        title={cancelModalTitle}
+        message={cancelModalMessage}
+        onClose={() => setCancelModalResultVisible(false)}
+      />
       <View style={{ height: 40 }} />
     </ScrollView>
   );
@@ -740,7 +886,6 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#e4633b', marginBottom: 6 },
   infoValue: { fontSize: 15, color: '#222', marginBottom: 4, marginLeft: 4 },
   infoLabel: { fontSize: 14, fontWeight: '700', color: '#888', marginBottom: 3, marginTop: 6 },
-
   productList: { marginTop: 18, marginHorizontal: 10 },
   productCard: {
     flexDirection: 'row', backgroundColor: '#fff', borderRadius: 13, marginBottom: 14,
@@ -757,20 +902,17 @@ const styles = StyleSheet.create({
     marginTop: 6, alignSelf: 'flex-start'
   },
   rateBtnText: { color: '#8B5A2B', fontWeight: 'bold', fontSize: 15 },
-
   summaryCard: {
     backgroundColor: '#fff', borderRadius: 14, padding: 15, marginHorizontal: 14, marginTop: 16, elevation: 2,
   },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
   label: { color: '#444', fontSize: 14 },
   value: { color: '#333', fontSize: 14, fontWeight: 'bold' },
-
   contactBtn: {
     backgroundColor: "#e4633b", marginHorizontal: 40, marginTop: 20, flexDirection: 'row', alignItems: 'center',
     justifyContent: 'center', borderRadius: 20, paddingVertical: 12, elevation: 3
   },
   contactText: { color: "#fff", fontSize: 16, fontWeight: 'bold' },
-
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FA' },
   loadingText: { marginTop: 10, fontSize: 16, color: '#666' },
   errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FA' },
@@ -779,8 +921,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#e4633b', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 20, marginTop: 14,
   },
   retryButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
-
-  // CustomModal styles
   modalContainer: { backgroundColor: '#fff', borderRadius: 15, padding: 20, alignItems: 'center', marginHorizontal: 20 },
   icon: { marginBottom: 15 },
   title1Modal: { fontSize: 18, fontWeight: 'bold', color: '#222', marginBottom: 8 },

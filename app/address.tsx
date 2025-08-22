@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, Image,
-  ActivityIndicator, TextInput, Modal, FlatList, Linking
+  ActivityIndicator, TextInput, Modal, FlatList, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -12,7 +12,7 @@ import CustomModal from './components/CustomModal';
 import { useStripe } from '@stripe/stripe-react-native';
 import { AppState } from 'react-native';
 import { RefreshControl } from 'react-native';
-
+import { WebView } from 'react-native-webview';
 // --- Utils ---
 const extractProvince = (addressString) => {
   if (!addressString) return '';
@@ -54,6 +54,9 @@ const AddressScreen = () => {
   const [zaloOrderId, setZaloOrderId] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [addressModalVisible, setAddressModalVisible] = useState(false);
+  const [vnpayUrl, setVnpayUrl] = useState(null);
+  const [currentOrderParams, setCurrentOrderParams] = useState(null);
+ 
 
   // Hàm làm mới 
   const onRefresh = async () => {
@@ -139,6 +142,7 @@ const AddressScreen = () => {
     { id: 'cash', name: 'Tiền mặt khi nhận hàng', gateway: null },
     { id: 'credit_card', name: 'Thẻ tín dụng/Thẻ ghi nợ', gateway: 'Stripe' },
     { id: 'zalopay', name: 'Thanh toán bằng ZaloPay', gateway: 'ZaloPay' },
+    { id: 'vnpay', name: 'Thanh toán qua VNPAY', gateway: 'VNPAY' },
   ];
 
   // Kiểm tra trạng thái thanh toán ZaloPay
@@ -215,9 +219,16 @@ const AddressScreen = () => {
       const orderPayload = {
         userID: user._id,
         paymentInfo: {
-          paymentMethod: selectedPaymentMethod.id === 'credit_card' ? 'Stripe' : selectedPaymentMethod.id === 'zalopay' ? 'ZaloPay' : 'Cash',
-          status: 'pending', // Sử dụng lowercase để đồng bộ với schema
-        },
+        paymentMethod: 
+          selectedPaymentMethod.id === 'vnpay'
+            ? 'VNPAY'
+            : selectedPaymentMethod.id === 'credit_card'
+            ? 'Stripe'
+            : selectedPaymentMethod.id === 'zalopay'
+            ? 'ZaloPay'
+            : 'Cash',
+        status: 'pending',
+      },
         shippingAddress: selectedAddress.address,
         name: selectedAddress.name || 'Nguyễn Văn A',
         sdt: selectedAddress.sdt || '0909123456',
@@ -226,9 +237,9 @@ const AddressScreen = () => {
         totalAmount,
         voucherCode: selectedVoucher?.code,
       };
-
+      console.log("📤 ORDER PAYLOAD gửi lên server:", JSON.stringify(orderPayload, null, 2));
       const orderResponse = await AxiosInstance().post('/order/checkout', orderPayload);
-
+      console.log("📥 ORDER RESPONSE từ server:", orderResponse);
       if (!orderResponse.order?._id) {
         showModal('error', 'Lỗi', 'Không thể tạo đơn hàng. Vui lòng thử lại.');
         return;
@@ -244,7 +255,7 @@ const AddressScreen = () => {
         totalAmount: totalAmount.toString(),
         paymentStatus: selectedPaymentMethod.id === 'credit_card' ? 'paid' : selectedPaymentMethod.id === 'zalopay' ? 'pending' : 'pending',
       };
-
+      setCurrentOrderParams(params);
       // Tiền mặt khi nhận hàng
       if (selectedPaymentMethod.id === 'cash') {
         router.replace({
@@ -344,6 +355,31 @@ const AddressScreen = () => {
         }
         return;
       }
+      // Thanh toán VNPAY
+      if (selectedPaymentMethod.id === 'vnpay') {
+        try {
+          setPaymentLoading(true);
+          console.log("📦 ORDER RESPONSE:", orderResponse);
+          const vnpayResponse = await AxiosInstance().post('/order/vnpay_create', {
+            amount: totalAmount,
+            orderId: orderResponse.order._id,
+          });
+
+          if (vnpayResponse.paymentUrl) {
+            setVnpayUrl(vnpayResponse.paymentUrl); // mở WebView
+          } else {
+            throw new Error('Không nhận được URL thanh toán từ server');
+          }
+        } catch (err) {
+          console.error("❌ VNPAY ERROR:", err);
+          showModal('error', 'Lỗi', err.message || 'Không thể khởi tạo thanh toán VNPAY', true);
+        } finally {
+          setPaymentLoading(false);
+        }
+        return;
+      }
+
+
 
     } catch (err) {
       showModal('error', 'Lỗi', err.response?.data?.message || err.message || 'Không thể tạo đơn hàng. Vui lòng thử lại.');
@@ -410,6 +446,54 @@ useEffect(() => {
       </TouchableOpacity>
     );
   };
+  if (vnpayUrl) {
+  return (
+    <Modal
+      visible={!!vnpayUrl}
+      animationType="slide"
+      onRequestClose={() => {
+        // User bấm back/thoát WebView
+        showModal('error', 'Thanh toán chưa hoàn tất', 'Bạn đã thoát trước khi thanh toán xong.', true);
+        setVnpayUrl(null);
+        router.replace('/payment');
+      }}
+    >
+      <WebView
+        source={{ uri: vnpayUrl }}
+        onMessage={(event) => {
+          try {
+            const data = JSON.parse(event.nativeEvent.data);
+            if (data.status === "success") {
+              showModal('success', 'Thanh toán thành công', 'Đơn hàng đã được xử lý!');
+              router.push({
+                pathname: '/checkout',
+                params: { ...currentOrderParams, paymentStatus: 'paid' },
+              });
+            } else {
+              showModal('error', 'Thanh toán thất bại', data.message || 'Vui lòng thử lại', true);
+              router.replace('/payment');
+            }
+          } catch (e) {
+            showModal('error', 'Lỗi', 'Không đọc được dữ liệu thanh toán', true);
+            router.replace('/payment');
+          }
+          setVnpayUrl(null);
+        }}
+        onError={() => {
+          showModal('error', 'Thanh toán lỗi', 'Kết nối không thành công, vui lòng thử lại.', true);
+          setVnpayUrl(null);
+          router.replace('/payment');
+        }}
+        onNavigationStateChange={(navState) => {
+          // Chỉ xử lý khi quay về đúng returnUrl thôi
+          if (navState.url.includes("vnpay_return")) {
+            console.log("👉 Đã quay về returnUrl thành công");
+          }
+        }}
+      />
+    </Modal>
+  );
+}
 
   return (
     <View style={styles.rootContainer}>

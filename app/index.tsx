@@ -60,11 +60,11 @@ export default function SplashScreen() {
       if (user) {
         router.replace('/home');
       } else {
-        router.replace('/login'); // hoặc '/index'
+        router.replace('/home'); 
       }
     } catch (error) {
       console.error('Error in splash login check:', error);
-      router.replace('/login');
+      router.replace('/home');
     }
   }, 3000);
 

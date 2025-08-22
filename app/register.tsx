@@ -178,9 +178,9 @@ const showModal = ({
       <Text style={styles.title}>Đăng Ký Tài Khoản</Text>
 
       {renderInput('user', 'FontAwesome5', 'Tài khoản', username, setUsername)}
+      {renderInput('email', 'MaterialIcons', 'Email', email, setEmail, false, false, null, 'email-address')}
       {renderInput('lock', 'FontAwesome5', 'Mật khẩu', password, setPassword, true, showPassword, () => setShowPassword(!showPassword))}
       {renderInput('lock', 'FontAwesome5', 'Nhập lại mật khẩu', confirmPassword, setConfirmPassword, true, showConfirmPassword, () => setShowConfirmPassword(!showConfirmPassword))}
-      {renderInput('email', 'MaterialIcons', 'Email', email, setEmail, false, false, null, 'email-address')}
       {renderInput('phone', 'FontAwesome5', 'Số điện thoại', phone, setPhone, false, false, null, 'phone-pad')}
 
       <TouchableOpacity

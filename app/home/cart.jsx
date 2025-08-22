@@ -118,41 +118,48 @@ const fetchCart = useCallback(async () => {
   }, [user?._id, fetchCart]);
 
   const removeFromCart = async (cartId) => {
-    showModal(
-      'warning',
-      'Xác nhận',
-      'Bạn muốn xóa sản phẩm này khỏi giỏ hàng?',
-      true,
-      async () => {
-        try {
-          await AxiosInstance().delete(`/cart/${cartId}`);
-          setCart((prev) => prev.filter((item) => item._id !== cartId));
-          setSelectedItems((prev) => prev.filter((_, i) => cart[i]?._id !== cartId));
-          setSelectAll(false);
-          showModal('success', 'Thành công', 'Sản phẩm đã được xóa khỏi giỏ hàng.');
-        } catch (err) {
-          showModal('error', 'Lỗi', 'Không thể xóa sản phẩm khỏi giỏ hàng.');
-        }
+  showModal(
+    'warning',
+    'Xác nhận',
+    'Bạn muốn xóa sản phẩm này khỏi giỏ hàng?',
+    true,
+    async () => {
+      try {
+        await AxiosInstance().delete(`/cart/${cartId}`);
+        setCart((prev) => prev.filter((item) => item._id !== cartId));
+        // Đồng bộ enrichedCart
+        setEnrichedCart((prev) => prev.filter((item) => item._id !== cartId));
+        setSelectedItems((prev) => prev.filter((_, i) => cart[i]?._id !== cartId));
+        setSelectAll(false);
+        showModal('success', 'Thành công', 'Sản phẩm đã được xóa khỏi giỏ hàng.');
+      } catch (err) {
+        showModal('error', 'Lỗi', 'Không thể xóa sản phẩm khỏi giỏ hàng.');
       }
-    );
-  };
-
-  const updateQuantity = async (cartId, value) => {
-    const cartItem = cart.find((item) => item._id === cartId);
-    if (!cartItem) return;
-    if (value === -1 && cartItem.soluong <= 1) return;
-    try {
-      const endpoint = value === -1 ? `/cart/${cartId}/decrease` : `/cart/${cartId}/increase`;
-      await AxiosInstance().patch(endpoint);
-      setCart((prev) =>
-        prev.map((item) =>
-          item._id === cartId ? { ...item, soluong: item.soluong + value } : item
-        )
-      );
-    } catch (err) {
-      showModal('error', 'Lỗi', 'Số lượng vượt quá tồn kho.');
     }
-  };
+  );
+};
+ const updateQuantity = async (cartId, value) => {
+  const cartItem = cart.find((item) => item._id === cartId);
+  if (!cartItem) return;
+  if (value === -1 && cartItem.soluong <= 1) return;
+  try {
+    const endpoint = value === -1 ? `/cart/${cartId}/decrease` : `/cart/${cartId}/increase`;
+    await AxiosInstance().patch(endpoint);
+    setCart((prev) =>
+      prev.map((item) =>
+        item._id === cartId ? { ...item, soluong: item.soluong + value } : item
+      )
+    );
+    // Đồng bộ enrichedCart
+    setEnrichedCart((prev) =>
+      prev.map((item) =>
+        item._id === cartId ? { ...item, soluong: item.soluong + value } : item
+      )
+    );
+  } catch (err) {
+    showModal('error', 'Lỗi', 'Số lượng vượt quá tồn kho.');
+  }
+};
 
   const navigateToProductDetail = (productId) => {
     if (productId) {

@@ -225,7 +225,7 @@ const handleSocialLogin = async (platform) => {
             disabled={loading}
             activeOpacity={0.8}
           >
-            <Text style={styles.loginText}>{loading ? 'Đang đăng nhập...' : 'Sign In'}</Text>
+            <Text style={styles.loginText}>{loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</Text>
           </TouchableOpacity>
         </>
       ) : (
@@ -255,12 +255,9 @@ const handleSocialLogin = async (platform) => {
       <Text style={styles.dividerText}>Hoặc đăng nhập bằng</Text>
 
       <View style={styles.socialButtonsContainer}>
-        <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('Apple')}>
-          <MaterialCommunityIcons name="apple" size={24} color="#000" />
-        </TouchableOpacity>
        <TouchableOpacity style={styles.socialBtn} onPress={handleGoogleLogin}>
-  <MaterialCommunityIcons name="google" size={24} color="#DB4437" />
-</TouchableOpacity>
+        <MaterialCommunityIcons name="google" size={24} color="#DB4437" />
+      </TouchableOpacity>
         <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('Facebook')}>
           <MaterialCommunityIcons name="facebook" size={24} color="#3B5998" />
         </TouchableOpacity>
@@ -268,7 +265,7 @@ const handleSocialLogin = async (platform) => {
 
       <TouchableOpacity onPress={goToRegister} style={styles.registerBtn}>
         <Text style={styles.registerText}>
-          Bạn chưa có tài khoản? <Text style={styles.registerLink}>Sign Up</Text>
+          Bạn chưa có tài khoản? <Text style={styles.registerLink}>Đăng ký</Text>
         </Text>
       </TouchableOpacity>
     </View>
